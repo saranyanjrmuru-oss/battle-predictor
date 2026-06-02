@@ -1,0 +1,1498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Battle Predictor — AI Combat Arena</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700;900&family=Cinzel:wght@400;600&family=Crimson+Pro:ital,wght@0,300;0,400;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --gold: #c9a84c;
+    --gold-light: #f0d080;
+    --gold-dark: #7a5e1a;
+    --blood: #8b1a1a;
+    --blood-light: #c0392b;
+    --blood-dark: #4a0000;
+    --shadow: #0a0a0a;
+    --dark: #0d0d0f;
+    --panel: #12121a;
+    --panel2: #1a1a28;
+    --text: #e8dfc0;
+    --text-dim: #9a8a6a;
+    --mana: #1a3a6a;
+    --mana-light: #4a80c0;
+    --heal: #1a4a2a;
+    --heal-light: #3aaa5a;
+  }
+
+  body {
+    background: var(--dark);
+    color: var(--text);
+    font-family: 'Crimson Pro', Georgia, serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+    background-image:
+      radial-gradient(ellipse at 20% 50%, rgba(139,26,26,0.08) 0%, transparent 60%),
+      radial-gradient(ellipse at 80% 50%, rgba(26,58,106,0.08) 0%, transparent 60%);
+  }
+
+  /* Particle canvas */
+  #particles { position: fixed; top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0; }
+
+  .game-container {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 1.5rem 1rem 3rem;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Header */
+  .game-title {
+    text-align: center;
+    padding: 1.5rem 0 1rem;
+    border-bottom: 1px solid rgba(201,168,76,0.3);
+    margin-bottom: 1.5rem;
+  }
+  .game-title h1 {
+    font-family: 'Cinzel Decorative', serif;
+    font-size: clamp(1.4rem, 5vw, 2.4rem);
+    color: var(--gold);
+    text-shadow: 0 0 30px rgba(201,168,76,0.5);
+    letter-spacing: 0.05em;
+    line-height: 1.2;
+  }
+  .game-title p {
+    color: var(--text-dim);
+    font-style: italic;
+    font-size: 1rem;
+    margin-top: 0.4rem;
+  }
+  .subtitle-badge {
+    display: inline-block;
+    border: 1px solid rgba(201,168,76,0.4);
+    border-radius: 2px;
+    padding: 0.15rem 0.6rem;
+    font-size: 0.7rem;
+    font-family: 'Cinzel', serif;
+    letter-spacing: 0.15em;
+    color: var(--gold-dark);
+    margin-top: 0.5rem;
+    text-transform: uppercase;
+  }
+
+  /* Health bars */
+  .combatants {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 1rem;
+    align-items: center;
+    margin-bottom: 1.5rem;
+  }
+  .combatant-card {
+    background: var(--panel);
+    border: 1px solid rgba(201,168,76,0.15);
+    border-radius: 6px;
+    padding: 1rem;
+    position: relative;
+    overflow: hidden;
+  }
+  .combatant-card::before {
+    content: '';
+    position: absolute;
+    top:0; left:0; right:0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--gold), transparent);
+    opacity: 0.5;
+  }
+  .combatant-name {
+    font-family: 'Cinzel', serif;
+    font-size: 0.85rem;
+    letter-spacing: 0.1em;
+    color: var(--gold);
+    margin-bottom: 0.5rem;
+    text-transform: uppercase;
+  }
+  .hp-label {
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.3rem;
+  }
+  .hp-bar-wrap {
+    background: rgba(0,0,0,0.5);
+    border-radius: 3px;
+    height: 10px;
+    border: 1px solid rgba(255,255,255,0.05);
+    overflow: hidden;
+  }
+  .hp-bar {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.5s ease;
+  }
+  .hp-bar.player { background: linear-gradient(90deg, #1e7a4a, #3aaa5a); }
+  .hp-bar.enemy  { background: linear-gradient(90deg, #8b1a1a, #c0392b); }
+  .hp-bar.low    { background: linear-gradient(90deg, #7a1a00, #c0392b) !important; animation: pulse-bar 1s infinite; }
+
+  @keyframes pulse-bar { 0%,100%{opacity:1} 50%{opacity:0.6} }
+
+  .combatant-icon {
+    font-size: 2.5rem;
+    text-align: center;
+    margin-bottom: 0.4rem;
+    filter: drop-shadow(0 2px 8px rgba(0,0,0,0.8));
+  }
+  .status-effects {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 0.5rem;
+    min-height: 20px;
+  }
+  .status-pill {
+    font-size: 0.65rem;
+    padding: 1px 6px;
+    border-radius: 2px;
+    font-family: 'Cinzel', serif;
+    letter-spacing: 0.05em;
+  }
+  .status-pill.shield { background: rgba(26,58,106,0.5); border: 1px solid #4a80c0; color: #9abde0; }
+  .status-pill.poison { background: rgba(50,20,80,0.5); border: 1px solid #8a40c0; color: #b980e0; }
+  .status-pill.regen  { background: rgba(20,60,30,0.5); border: 1px solid #3aaa5a; color: #80dd9a; }
+  .status-pill.rage   { background: rgba(139,26,26,0.5); border: 1px solid #c0392b; color: #e08080; }
+
+  .vs-box {
+    text-align: center;
+  }
+  .vs-text {
+    font-family: 'Cinzel Decorative', serif;
+    font-size: 1.4rem;
+    color: var(--gold);
+    opacity: 0.7;
+  }
+  .round-badge {
+    font-family: 'Cinzel', serif;
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  /* AI Prediction Panel */
+  .ai-panel {
+    background: var(--panel2);
+    border: 1px solid rgba(74,128,192,0.3);
+    border-radius: 6px;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1.25rem;
+    position: relative;
+    overflow: hidden;
+  }
+  .ai-panel::before {
+    content: '';
+    position: absolute;
+    top:0; left:0; right:0; bottom:0;
+    background: radial-gradient(ellipse at 50% 0%, rgba(74,128,192,0.06), transparent 60%);
+    pointer-events: none;
+  }
+  .ai-panel-title {
+    font-family: 'Cinzel', serif;
+    font-size: 0.7rem;
+    letter-spacing: 0.15em;
+    color: var(--mana-light);
+    text-transform: uppercase;
+    margin-bottom: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .ai-dot { width:6px;height:6px;border-radius:50%;background:var(--mana-light);animation:ai-blink 1.4s infinite; }
+  @keyframes ai-blink { 0%,100%{opacity:1}50%{opacity:0.2} }
+
+  .prediction-bars {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 0.5rem;
+  }
+  .pred-item { text-align: center; }
+  .pred-label {
+    font-family: 'Cinzel', serif;
+    font-size: 0.65rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 0.3rem;
+  }
+  .pred-label.attack { color: #e08080; }
+  .pred-label.defend { color: #9abde0; }
+  .pred-label.heal   { color: #80dd9a; }
+
+  .pred-bar-wrap {
+    background: rgba(0,0,0,0.4);
+    border-radius: 3px;
+    height: 8px;
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.04);
+  }
+  .pred-bar {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.6s cubic-bezier(0.4,0,0.2,1);
+  }
+  .pred-bar.attack { background: linear-gradient(90deg, #8b1a1a, #e05050); }
+  .pred-bar.defend { background: linear-gradient(90deg, #1a3a6a, #4a80c0); }
+  .pred-bar.heal   { background: linear-gradient(90deg, #1a4a2a, #3aaa5a); }
+  .pred-pct {
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-top: 0.2rem;
+  }
+  .pred-pct.attack { color: #e08080; }
+  .pred-pct.defend { color: #9abde0; }
+  .pred-pct.heal   { color: #80dd9a; }
+
+  .ai-thought {
+    margin-top: 0.75rem;
+    font-style: italic;
+    font-size: 0.85rem;
+    color: var(--text-dim);
+    border-top: 1px solid rgba(74,128,192,0.15);
+    padding-top: 0.6rem;
+    min-height: 1.4rem;
+  }
+
+  /* Action buttons */
+  .action-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 0.75rem;
+    margin-bottom: 1.25rem;
+  }
+  .action-btn {
+    background: var(--panel);
+    border-radius: 6px;
+    padding: 1rem 0.5rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: center;
+    border: 1px solid rgba(201,168,76,0.15);
+    position: relative;
+    overflow: hidden;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .action-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.5); }
+  .action-btn:active { transform: translateY(0) scale(0.97); }
+  .action-btn.disabled { opacity: 0.4; pointer-events: none; }
+
+  .action-btn.attack { border-color: rgba(192,57,43,0.4); }
+  .action-btn.attack:hover { background: rgba(139,26,26,0.3); border-color: rgba(192,57,43,0.8); }
+  .action-btn.defend { border-color: rgba(74,128,192,0.4); }
+  .action-btn.defend:hover { background: rgba(26,58,106,0.3); border-color: rgba(74,128,192,0.8); }
+  .action-btn.heal   { border-color: rgba(58,170,90,0.4); }
+  .action-btn.heal:hover { background: rgba(26,74,42,0.3); border-color: rgba(58,170,90,0.8); }
+
+  .btn-icon { font-size: 1.8rem; margin-bottom: 0.3rem; display: block; }
+  .btn-name {
+    font-family: 'Cinzel', serif;
+    font-size: 0.75rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    display: block;
+  }
+  .btn-name.attack { color: #e08080; }
+  .btn-name.defend { color: #9abde0; }
+  .btn-name.heal   { color: #80dd9a; }
+  .btn-desc {
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    display: block;
+    margin-top: 0.15rem;
+    font-style: italic;
+  }
+  .heal-uses {
+    position: absolute;
+    top: 6px; right: 8px;
+    font-size: 0.65rem;
+    color: #80dd9a;
+    font-family: 'Cinzel', serif;
+  }
+
+  /* Combat log */
+  .log-panel {
+    background: var(--panel);
+    border: 1px solid rgba(201,168,76,0.1);
+    border-radius: 6px;
+    padding: 0.75rem 1rem;
+    margin-bottom: 1.25rem;
+    max-height: 160px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(201,168,76,0.2) transparent;
+  }
+  .log-panel::-webkit-scrollbar { width: 4px; }
+  .log-panel::-webkit-scrollbar-thumb { background: rgba(201,168,76,0.2); border-radius: 2px; }
+  .log-entry {
+    font-size: 0.85rem;
+    line-height: 1.6;
+    padding: 0.1rem 0;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+    animation: fadeIn 0.3s ease;
+  }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:translateY(0)} }
+  .log-entry .round-num { color: var(--gold-dark); font-family: 'Cinzel', serif; font-size: 0.7rem; }
+  .log-entry .dmg-player { color: #e08080; font-weight: 600; }
+  .log-entry .dmg-enemy  { color: #80dd9a; font-weight: 600; }
+  .log-entry .log-special { color: var(--gold); font-style: italic; }
+  .log-entry .log-info    { color: var(--text-dim); }
+
+  /* Stats / bottom row */
+  .bottom-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .stats-panel, .inventory-panel {
+    background: var(--panel);
+    border: 1px solid rgba(201,168,76,0.12);
+    border-radius: 6px;
+    padding: 0.85rem 1rem;
+  }
+  .panel-title {
+    font-family: 'Cinzel', serif;
+    font-size: 0.7rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--gold-dark);
+    border-bottom: 1px solid rgba(201,168,76,0.15);
+    padding-bottom: 0.4rem;
+    margin-bottom: 0.6rem;
+  }
+
+  .stat-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.8rem;
+    padding: 0.15rem 0;
+  }
+  .stat-label { color: var(--text-dim); }
+  .stat-val { color: var(--text); font-weight: 600; }
+  .stat-val.gold { color: var(--gold); }
+  .stat-val.red  { color: #e08080; }
+  .stat-val.green{ color: #80dd9a; }
+
+  .item-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.4rem;
+  }
+  .item-btn {
+    background: rgba(0,0,0,0.3);
+    border: 1px solid rgba(201,168,76,0.12);
+    border-radius: 4px;
+    padding: 0.4rem 0.5rem;
+    font-size: 0.75rem;
+    cursor: pointer;
+    color: var(--text);
+    text-align: left;
+    transition: all 0.2s;
+    font-family: 'Crimson Pro', serif;
+  }
+  .item-btn:hover { background: rgba(201,168,76,0.08); border-color: rgba(201,168,76,0.3); }
+  .item-btn:disabled { opacity: 0.3; cursor: default; }
+  .item-btn .item-icon { font-size: 1rem; margin-right: 0.3rem; }
+  .item-count {
+    font-size: 0.65rem;
+    color: var(--gold);
+    float: right;
+  }
+
+  /* Score display */
+  .score-bar {
+    display: flex;
+    justify-content: center;
+    gap: 2rem;
+    background: var(--panel2);
+    border: 1px solid rgba(201,168,76,0.15);
+    border-radius: 6px;
+    padding: 0.6rem 1rem;
+    margin-bottom: 1.25rem;
+  }
+  .score-item { text-align: center; }
+  .score-num {
+    font-family: 'Cinzel Decorative', serif;
+    font-size: 1.4rem;
+    color: var(--gold);
+    line-height: 1;
+  }
+  .score-lbl {
+    font-family: 'Cinzel', serif;
+    font-size: 0.6rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-top: 0.15rem;
+  }
+  .score-sep { width: 1px; background: rgba(201,168,76,0.2); }
+
+  /* Overlay */
+  .overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.85);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    backdrop-filter: blur(4px);
+  }
+  .overlay.hidden { display: none; }
+  .overlay-box {
+    background: var(--panel2);
+    border: 1px solid rgba(201,168,76,0.4);
+    border-radius: 10px;
+    padding: 2.5rem 2rem;
+    text-align: center;
+    max-width: 380px;
+    width: 90%;
+    position: relative;
+  }
+  .overlay-box::before {
+    content:'';
+    position:absolute;
+    top:0;left:0;right:0;
+    height:3px;
+    border-radius:10px 10px 0 0;
+    background: linear-gradient(90deg, transparent, var(--gold), transparent);
+  }
+  .overlay-title {
+    font-family: 'Cinzel Decorative', serif;
+    font-size: 1.6rem;
+    margin-bottom: 0.5rem;
+  }
+  .overlay-title.win  { color: var(--gold); text-shadow: 0 0 30px rgba(201,168,76,0.6); }
+  .overlay-title.lose { color: var(--blood-light); text-shadow: 0 0 30px rgba(139,26,26,0.6); }
+  .overlay-sub {
+    font-size: 1rem;
+    color: var(--text-dim);
+    font-style: italic;
+    margin-bottom: 1.5rem;
+  }
+  .overlay-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+  }
+  .o-stat {
+    background: rgba(0,0,0,0.3);
+    border-radius: 4px;
+    padding: 0.5rem;
+    border: 1px solid rgba(201,168,76,0.1);
+  }
+  .o-stat-n { font-family: 'Cinzel', serif; font-size: 1.1rem; color: var(--gold); }
+  .o-stat-l { font-size: 0.7rem; color: var(--text-dim); font-style: italic; }
+  .overlay-btn {
+    background: rgba(201,168,76,0.12);
+    border: 1px solid rgba(201,168,76,0.5);
+    border-radius: 6px;
+    padding: 0.75rem 2rem;
+    font-family: 'Cinzel', serif;
+    font-size: 0.85rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--gold);
+    cursor: pointer;
+    transition: all 0.2s;
+    margin: 0.3rem;
+  }
+  .overlay-btn:hover { background: rgba(201,168,76,0.22); transform: translateY(-1px); }
+
+  /* Floating damage numbers */
+  .float-dmg {
+    position: fixed;
+    font-family: 'Cinzel Decorative', serif;
+    font-size: 1.4rem;
+    font-weight: 900;
+    pointer-events: none;
+    z-index: 50;
+    animation: floatUp 1.2s ease-out forwards;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.8);
+  }
+  .float-dmg.red   { color: #ff5555; }
+  .float-dmg.green { color: #55ff88; }
+  .float-dmg.blue  { color: #5599ff; }
+  .float-dmg.gold  { color: #f0d080; }
+  @keyframes floatUp {
+    0%   { opacity:1; transform: translateY(0) scale(1); }
+    60%  { opacity:1; transform: translateY(-60px) scale(1.2); }
+    100% { opacity:0; transform: translateY(-100px) scale(0.8); }
+  }
+
+  /* Flash effects */
+  .flash-damage { animation: flashDmg 0.35s ease; }
+  .flash-heal    { animation: flashHeal 0.35s ease; }
+  @keyframes flashDmg  { 0%{filter:brightness(1)} 40%{filter:brightness(2) sepia(1) saturate(5) hue-rotate(-30deg)} 100%{filter:brightness(1)} }
+  @keyframes flashHeal { 0%{filter:brightness(1)} 40%{filter:brightness(1.8) sepia(1) saturate(3) hue-rotate(80deg)} 100%{filter:brightness(1)} }
+
+  /* Sound toggle */
+  .sound-btn {
+    position: fixed;
+    bottom: 1rem; right: 1rem;
+    background: var(--panel2);
+    border: 1px solid rgba(201,168,76,0.3);
+    border-radius: 50%;
+    width: 38px; height: 38px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    font-size: 1.1rem;
+    z-index: 10;
+    transition: all 0.2s;
+  }
+  .sound-btn:hover { background: rgba(201,168,76,0.15); }
+
+  /* Leaderboard */
+  .leaderboard-panel {
+    background: var(--panel);
+    border: 1px solid rgba(201,168,76,0.12);
+    border-radius: 6px;
+    padding: 0.85rem 1rem;
+    margin-bottom: 1.25rem;
+  }
+  .lb-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.25rem 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    font-size: 0.8rem;
+  }
+  .lb-rank { color: var(--gold); font-family:'Cinzel',serif; font-size:0.75rem; width:24px; }
+  .lb-name { color: var(--text); flex:1; padding-left:8px; }
+  .lb-score { color: var(--gold-light); font-family:'Cinzel',serif; font-size:0.8rem; }
+
+  /* Responsive */
+  @media (max-width: 600px) {
+    .combatants { grid-template-columns: 1fr auto 1fr; gap: 0.5rem; }
+    .bottom-row { grid-template-columns: 1fr; }
+    .score-bar { gap: 1rem; }
+    .prediction-bars { gap: 0.3rem; }
+    .action-row { gap: 0.5rem; }
+    .btn-icon { font-size: 1.4rem; }
+    .btn-desc { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="particles"></canvas>
+
+<!-- Sound toggle -->
+<button class="sound-btn" id="soundBtn" title="Toggle sound">🔊</button>
+
+<!-- Game Over Overlay -->
+<div class="overlay hidden" id="overlay">
+  <div class="overlay-box">
+    <div class="overlay-title" id="overlayTitle"></div>
+    <div class="overlay-sub" id="overlaySub"></div>
+    <div class="overlay-stats" id="overlayStats"></div>
+    <button class="overlay-btn" onclick="restartGame()">⚔ Play Again</button>
+    <button class="overlay-btn" onclick="showLeaderboard()">🏆 Leaderboard</button>
+  </div>
+</div>
+
+<!-- Leaderboard Overlay -->
+<div class="overlay hidden" id="lbOverlay">
+  <div class="overlay-box">
+    <div class="overlay-title win" style="font-size:1.2rem;margin-bottom:1rem">🏆 Hall of Legends</div>
+    <div id="lbContent" style="margin-bottom:1.5rem;max-height:250px;overflow-y:auto;"></div>
+    <button class="overlay-btn" onclick="closeLb()">Close</button>
+    <button class="overlay-btn" onclick="clearLb()">Clear</button>
+  </div>
+</div>
+
+<div class="game-container">
+
+  <div class="game-title">
+    <h1>⚔ Battle Predictor</h1>
+    <p>The Oracle watches your every move</p>
+    <div class="subtitle-badge">Adaptive AI Combat · MLP Pattern Recognition</div>
+  </div>
+
+  <!-- Score Bar -->
+  <div class="score-bar">
+    <div class="score-item">
+      <div class="score-num" id="scoreDisplay">0</div>
+      <div class="score-lbl">Score</div>
+    </div>
+    <div class="score-sep"></div>
+    <div class="score-item">
+      <div class="score-num" id="winsDisplay">0</div>
+      <div class="score-lbl">Wins</div>
+    </div>
+    <div class="score-sep"></div>
+    <div class="score-item">
+      <div class="score-num" id="roundDisplay">1</div>
+      <div class="score-lbl">Round</div>
+    </div>
+    <div class="score-sep"></div>
+    <div class="score-item">
+      <div class="score-num" id="streakDisplay">0</div>
+      <div class="score-lbl">Streak</div>
+    </div>
+  </div>
+
+  <!-- Combatants -->
+  <div class="combatants">
+    <div class="combatant-card" id="playerCard">
+      <div class="combatant-icon">🧙</div>
+      <div class="combatant-name">The Champion</div>
+      <div class="hp-label">
+        <span>HP</span>
+        <span id="playerHpText">100 / 100</span>
+      </div>
+      <div class="hp-bar-wrap">
+        <div class="hp-bar player" id="playerHpBar" style="width:100%"></div>
+      </div>
+      <div class="status-effects" id="playerStatus"></div>
+    </div>
+
+    <div class="vs-box">
+      <div class="vs-text">VS</div>
+      <div class="round-badge" id="roundBadge">Round 1</div>
+    </div>
+
+    <div class="combatant-card" id="enemyCard">
+      <div class="combatant-icon" id="enemyIcon">👹</div>
+      <div class="combatant-name" id="enemyName">The Oracle</div>
+      <div class="hp-label">
+        <span>HP</span>
+        <span id="enemyHpText">100 / 100</span>
+      </div>
+      <div class="hp-bar-wrap">
+        <div class="hp-bar enemy" id="enemyHpBar" style="width:100%"></div>
+      </div>
+      <div class="status-effects" id="enemyStatus"></div>
+    </div>
+  </div>
+
+  <!-- AI Prediction Panel -->
+  <div class="ai-panel">
+    <div class="ai-panel-title">
+      <div class="ai-dot"></div>
+      Oracle's Prediction — Your Next Move
+    </div>
+    <div class="prediction-bars">
+      <div class="pred-item">
+        <div class="pred-label attack">⚔ Attack</div>
+        <div class="pred-bar-wrap">
+          <div class="pred-bar attack" id="predAttack" style="width:33%"></div>
+        </div>
+        <div class="pred-pct attack" id="predAttackPct">33%</div>
+      </div>
+      <div class="pred-item">
+        <div class="pred-label defend">🛡 Defend</div>
+        <div class="pred-bar-wrap">
+          <div class="pred-bar defend" id="predDefend" style="width:33%"></div>
+        </div>
+        <div class="pred-pct defend" id="predDefendPct">33%</div>
+      </div>
+      <div class="pred-item">
+        <div class="pred-label heal">💚 Heal</div>
+        <div class="pred-bar-wrap">
+          <div class="pred-bar heal" id="predHeal" style="width:33%"></div>
+        </div>
+        <div class="pred-pct heal" id="predHealPct">33%</div>
+      </div>
+    </div>
+    <div class="ai-thought" id="aiThought">
+      <em>"I am learning your patterns, warrior..."</em>
+    </div>
+  </div>
+
+  <!-- Action Buttons -->
+  <div class="action-row">
+    <div class="action-btn attack" onclick="playerAction('attack')">
+      <span class="btn-icon">⚔️</span>
+      <span class="btn-name attack">Attack</span>
+      <span class="btn-desc">15–25 damage</span>
+    </div>
+    <div class="action-btn defend" onclick="playerAction('defend')">
+      <span class="btn-icon">🛡️</span>
+      <span class="btn-name defend">Defend</span>
+      <span class="btn-desc">Block + counter</span>
+    </div>
+    <div class="action-btn heal" onclick="playerAction('heal')">
+      <span class="btn-icon">💚</span>
+      <span class="btn-name heal">Heal</span>
+      <span class="btn-desc">Restore 25–35 HP</span>
+      <span class="heal-uses" id="healUses">×3</span>
+    </div>
+  </div>
+
+  <!-- Bottom row: Stats + Inventory -->
+  <div class="bottom-row">
+    <div class="stats-panel">
+      <div class="panel-title">⚔ Battle Stats</div>
+      <div class="stat-row"><span class="stat-label">Damage Dealt</span><span class="stat-val red" id="statDmgDealt">0</span></div>
+      <div class="stat-row"><span class="stat-label">Damage Taken</span><span class="stat-val red" id="statDmgTaken">0</span></div>
+      <div class="stat-row"><span class="stat-label">Times Dodged</span><span class="stat-val green" id="statDodged">0</span></div>
+      <div class="stat-row"><span class="stat-label">AI Accuracy</span><span class="stat-val gold" id="statAIAcc">0%</span></div>
+      <div class="stat-row"><span class="stat-label">Combos</span><span class="stat-val gold" id="statCombos">0</span></div>
+    </div>
+
+    <div class="inventory-panel">
+      <div class="panel-title">🎒 Inventory</div>
+      <div class="item-grid">
+        <button class="item-btn" id="itemPotion" onclick="useItem('potion')">
+          <span class="item-icon">🧪</span>Elixir
+          <span class="item-count" id="potionCount">×2</span>
+        </button>
+        <button class="item-btn" id="itemBomb" onclick="useItem('bomb')">
+          <span class="item-icon">💣</span>Bomb
+          <span class="item-count" id="bombCount">×2</span>
+        </button>
+        <button class="item-btn" id="itemRune" onclick="useItem('rune')">
+          <span class="item-icon">🔮</span>Rune
+          <span class="item-count" id="runeCount">×1</span>
+        </button>
+        <button class="item-btn" id="itemShield" onclick="useItem('shield')">
+          <span class="item-icon">🪬</span>Ward
+          <span class="item-count" id="shieldCount">×1</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Combat Log -->
+  <div class="leaderboard-panel" id="logPanel">
+    <div class="panel-title">📜 Battle Chronicle</div>
+    <div class="log-panel" id="combatLog"></div>
+  </div>
+
+</div>
+
+<script>
+// ====================================================
+// AUDIO ENGINE (Web Audio API)
+// ====================================================
+let audioCtx = null;
+let soundEnabled = true;
+
+function getAudio() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+
+function playSound(type) {
+  if (!soundEnabled) return;
+  try {
+    const ctx = getAudio();
+    const g = ctx.createGain();
+    g.connect(ctx.destination);
+
+    const configs = {
+      attack:  () => playTone(ctx, g, [220,180,140], [0.0,0.05,0.2], 0.3, 'sawtooth'),
+      defend:  () => playTone(ctx, g, [440,480,400], [0.0,0.05,0.3], 0.25, 'square'),
+      heal:    () => playTone(ctx, g, [330,440,550,440], [0.0,0.1,0.2,0.35], 0.25, 'sine'),
+      hit:     () => playTone(ctx, g, [150,100,80], [0.0,0.05,0.2], 0.4, 'sawtooth'),
+      block:   () => playTone(ctx, g, [300,350,280], [0.0,0.03,0.15], 0.3, 'square'),
+      item:    () => playTone(ctx, g, [660,770,880], [0.0,0.08,0.25], 0.2, 'sine'),
+      win:     () => playFanfare(ctx, g),
+      lose:    () => playDirge(ctx, g),
+      predict: () => playTone(ctx, g, [200,210,200], [0.0,0.1,0.4], 0.1, 'sine'),
+      level:   () => playLevelUp(ctx, g),
+      combo:   () => playTone(ctx, g, [440,550,660,880], [0.0,0.05,0.1,0.18], 0.3, 'square'),
+    };
+    if (configs[type]) configs[type]();
+  } catch(e) {}
+}
+
+function playTone(ctx, gain, freqs, times, vol, type) {
+  const osc = ctx.createOscillator();
+  osc.type = type;
+  const gainNode = ctx.createGain();
+  gainNode.gain.setValueAtTime(vol, ctx.currentTime);
+  gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + times[times.length-1] + 0.05);
+  osc.connect(gainNode);
+  gainNode.connect(gain);
+  freqs.forEach((f,i) => osc.frequency.setValueAtTime(f, ctx.currentTime + times[i]));
+  osc.start(ctx.currentTime);
+  osc.stop(ctx.currentTime + times[times.length-1] + 0.1);
+}
+
+function playFanfare(ctx, g) {
+  const notes = [523,659,784,1047];
+  notes.forEach((f,i) => {
+    const o = ctx.createOscillator();
+    const gn = ctx.createGain();
+    o.connect(gn); gn.connect(g);
+    o.type = 'square';
+    o.frequency.value = f;
+    gn.gain.setValueAtTime(0.2, ctx.currentTime + i*0.15);
+    gn.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i*0.15 + 0.4);
+    o.start(ctx.currentTime + i*0.15);
+    o.stop(ctx.currentTime + i*0.15 + 0.4);
+  });
+}
+
+function playDirge(ctx, g) {
+  const notes = [220,196,174,164];
+  notes.forEach((f,i) => {
+    const o = ctx.createOscillator();
+    const gn = ctx.createGain();
+    o.connect(gn); gn.connect(g);
+    o.type = 'sine';
+    o.frequency.value = f;
+    gn.gain.setValueAtTime(0.2, ctx.currentTime + i*0.25);
+    gn.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i*0.25 + 0.5);
+    o.start(ctx.currentTime + i*0.25);
+    o.stop(ctx.currentTime + i*0.25 + 0.5);
+  });
+}
+
+function playLevelUp(ctx, g) {
+  const notes = [392,523,659,784,1047];
+  notes.forEach((f,i) => {
+    const o = ctx.createOscillator();
+    const gn = ctx.createGain();
+    o.connect(gn); gn.connect(g);
+    o.type = 'square';
+    o.frequency.value = f;
+    gn.gain.setValueAtTime(0.15, ctx.currentTime + i*0.08);
+    gn.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i*0.08 + 0.2);
+    o.start(ctx.currentTime + i*0.08);
+    o.stop(ctx.currentTime + i*0.08 + 0.25);
+  });
+}
+
+document.getElementById('soundBtn').onclick = () => {
+  soundEnabled = !soundEnabled;
+  document.getElementById('soundBtn').textContent = soundEnabled ? '🔊' : '🔇';
+};
+
+// ====================================================
+// PARTICLE ENGINE
+// ====================================================
+const canvas = document.getElementById('particles');
+const pctx = canvas.getContext('2d');
+let particles = [];
+
+function resizeCanvas() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
+
+function spawnParticles(x, y, color, count=10) {
+  for (let i = 0; i < count; i++) {
+    particles.push({
+      x, y,
+      vx: (Math.random()-0.5)*5,
+      vy: (Math.random()-2)*4,
+      life: 1,
+      decay: 0.03 + Math.random()*0.04,
+      size: 3 + Math.random()*5,
+      color
+    });
+  }
+}
+
+function animateParticles() {
+  pctx.clearRect(0, 0, canvas.width, canvas.height);
+  particles = particles.filter(p => p.life > 0);
+  particles.forEach(p => {
+    pctx.save();
+    pctx.globalAlpha = p.life;
+    pctx.fillStyle = p.color;
+    pctx.beginPath();
+    pctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
+    pctx.fill();
+    pctx.restore();
+    p.x += p.vx; p.y += p.vy;
+    p.vy += 0.1;
+    p.life -= p.decay;
+  });
+  requestAnimationFrame(animateParticles);
+}
+animateParticles();
+
+function getElemCenter(el) {
+  const r = el.getBoundingClientRect();
+  return { x: r.left + r.width/2, y: r.top + r.height/2 };
+}
+
+// ====================================================
+// FLOATING DAMAGE NUMBERS
+// ====================================================
+function showFloatDmg(x, y, text, cls) {
+  const el = document.createElement('div');
+  el.className = `float-dmg ${cls}`;
+  el.textContent = text;
+  el.style.left = (x - 20) + 'px';
+  el.style.top = (y - 20) + 'px';
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 1300);
+}
+
+// ====================================================
+// GAME STATE
+// ====================================================
+const ACTIONS = ['attack','defend','heal'];
+const ENEMY_CONFIGS = [
+  { name:"The Oracle",    icon:"👹", hp:100, atk:[15,22], def:0.35, healable:true },
+  { name:"Blood Wyrm",   icon:"🐉", hp:120, atk:[18,28], def:0.25, healable:false },
+  { name:"Shadow Witch", icon:"🧟", hp:90,  atk:[20,30], def:0.4,  healable:true },
+  { name:"Iron Golem",   icon:"🤖", hp:140, atk:[12,20], def:0.5,  healable:false },
+  { name:"Soul Reaper",  icon:"💀", hp:110, atk:[22,32], def:0.3,  healable:true },
+];
+
+let gs = {}; // game state
+
+function initGame() {
+  const lvl = (gs.level||0)+1;
+  const enemyCfg = ENEMY_CONFIGS[(lvl-1) % ENEMY_CONFIGS.length];
+  const hpBonus = (lvl-1) * 15;
+
+  gs = {
+    ...gs,
+    level: lvl,
+    round: 1,
+    playerHp: 100 + Math.floor((gs.level||0)*5),
+    playerMaxHp: 100 + Math.floor((gs.level||0)*5),
+    enemyHp: enemyCfg.hp + hpBonus,
+    enemyMaxHp: enemyCfg.hp + hpBonus,
+    enemy: enemyCfg,
+    healUses: 3,
+    playerStatus: {},  // {shield, regen, rage, poison}
+    enemyStatus: {},
+    inventory: { potion:2, bomb:2, rune:1, shield:1 },
+    history: gs.history || [],  // player move history
+    // MLP weights: how much each player move predicts each enemy counter
+    weights: gs.weights || { attack:[0.33,0.33,0.33], defend:[0.33,0.33,0.33], heal:[0.33,0.33,0.33] },
+    score: gs.score || 0,
+    wins: gs.wins || 0,
+    streak: gs.streak || 0,
+    totalRounds: gs.totalRounds || 0,
+    stats: { dmgDealt:0, dmgTaken:0, dodged:0, aiCorrect:0, aiTotal:0, combos:0 },
+    lastPlayerAction: null,
+    comboCount: 0,
+    gameActive: true,
+  };
+
+  document.getElementById('enemyIcon').textContent = gs.enemy.icon;
+  document.getElementById('enemyName').textContent = gs.enemy.name;
+
+  updateUI();
+  updateInventoryUI();
+  clearLog();
+  logEntry(`<span class="log-special">⚔ A new challenger approaches — ${gs.enemy.icon} ${gs.enemy.name}!</span>`);
+  logEntry(`<span class="log-info">Round ${gs.round} begins. Choose your action.</span>`);
+
+  if (lvl > 1) playSound('level');
+}
+
+// ====================================================
+// MLP PREDICTION ENGINE
+// ====================================================
+// Weights[playerMove][0,1,2] = probability AI picks attack/defend/heal in response
+// Learning: when player plays X, we reinforce the counter
+const COUNTER = { attack:'defend', defend:'attack', heal:'attack' };
+// Actions index
+const AI = { attack:0, defend:1, heal:2 };
+
+function updateWeights(playerAction, wasCorrect) {
+  const row = gs.weights[playerAction];
+  const lr = 0.15;
+  // Increment the action the player chose (so AI learns to predict it more)
+  row[AI[playerAction]] += lr;
+  // Normalize
+  const sum = row.reduce((a,b)=>a+b,0);
+  gs.weights[playerAction] = row.map(v => v/sum);
+}
+
+function getPrediction() {
+  // Look at last 5 moves and weight-average predictions
+  const hist = gs.history.slice(-5);
+  if (hist.length === 0) return [0.33,0.33,0.33];
+
+  let probs = [0,0,0];
+  hist.forEach((h,i) => {
+    const w = (i+1); // more recent = higher weight
+    const row = gs.weights[h];
+    probs[0] += row[0]*w;
+    probs[1] += row[1]*w;
+    probs[2] += row[2]*w;
+  });
+  const sum = probs.reduce((a,b)=>a+b,0);
+  return probs.map(v=>v/sum);
+}
+
+function aiChooseAction() {
+  const probs = getPrediction();
+  // AI counters predicted player action
+  const predictedIdx = probs.indexOf(Math.max(...probs));
+  const predictedAction = ACTIONS[predictedIdx];
+  // AI picks the counter action, with some randomness based on confidence
+  const confidence = Math.max(...probs);
+  const rand = Math.random();
+
+  // If confident (>50%), counter more often; else random
+  if (rand < confidence * 1.2) {
+    return COUNTER[predictedAction];
+  }
+  // Random fallback
+  return ACTIONS[Math.floor(Math.random()*3)];
+}
+
+function updatePredictionUI() {
+  const probs = getPrediction();
+  const pcts = probs.map(p => Math.round(p*100));
+
+  document.getElementById('predAttack').style.width = pcts[0]+'%';
+  document.getElementById('predDefend').style.width = pcts[1]+'%';
+  document.getElementById('predHeal').style.width   = pcts[2]+'%';
+  document.getElementById('predAttackPct').textContent = pcts[0]+'%';
+  document.getElementById('predDefendPct').textContent = pcts[1]+'%';
+  document.getElementById('predHealPct').textContent   = pcts[2]+'%';
+
+  const maxIdx = probs.indexOf(Math.max(...probs));
+  const labels = ['strike', 'shield', 'flee into healing'];
+  const thoughts = [
+    `"Your sword arm betrays you — you shall ${labels[maxIdx]} next."`,
+    `"I sense hesitation... and aggression beneath it."`,
+    `"${pcts[0]}% chance of attack. You are predictable, warrior."`,
+    `"Your pattern grows clearer with each blow."`,
+    `"The Oracle sees all. Your ${ACTIONS[maxIdx]} is foretold."`,
+    `"You favor ${ACTIONS[maxIdx]}. Curious."`,
+  ];
+  document.getElementById('aiThought').innerHTML = `<em>${thoughts[Math.floor(Math.random()*thoughts.length)]}</em>`;
+
+  playSound('predict');
+}
+
+// ====================================================
+// MAIN GAME LOGIC
+// ====================================================
+function playerAction(action) {
+  if (!gs.gameActive) return;
+  if (action === 'heal' && gs.healUses <= 0) {
+    logEntry(`<span class="log-info">No heal charges remain!</span>`);
+    return;
+  }
+
+  // Disable buttons
+  document.querySelectorAll('.action-btn').forEach(b=>b.classList.add('disabled'));
+  setTimeout(() => {
+    if (gs.gameActive) document.querySelectorAll('.action-btn').forEach(b=>b.classList.remove('disabled'));
+  }, 700);
+
+  const aiAction = aiChooseAction();
+  let playerDmg = 0, enemyDmg = 0;
+  let logMsg = '';
+  let outcome = '';
+  const atkMin = gs.enemy.atk[0], atkMax = gs.enemy.atk[1];
+  let playerBaseAtk = 15 + (gs.level-1)*3;
+  let playerAtkRand = Math.floor(Math.random()*10);
+
+  // Rage bonus
+  if (gs.playerStatus.rage) { playerBaseAtk = Math.floor(playerBaseAtk * 1.5); }
+
+  gs.totalRounds++;
+  gs.stats.aiTotal++;
+
+  // Resolve combat
+  if (action === 'attack') {
+    playSound('attack');
+    if (aiAction === 'defend') {
+      // Blocked! Counter-attack
+      enemyDmg = Math.floor((atkMin + Math.random()*(atkMax-atkMin)) * 0.5);
+      if (gs.playerStatus.shield) { enemyDmg = Math.floor(enemyDmg*0.3); }
+      logMsg = `⚔️ You attacked — <span class="dmg-player">BLOCKED!</span> Counter for <span class="dmg-player">-${enemyDmg} HP</span>`;
+      outcome = 'lose';
+      gs.stats.aiCorrect++;
+    } else if (aiAction === 'attack') {
+      // Both attack! Mutual damage
+      playerDmg = Math.floor(playerBaseAtk + playerAtkRand);
+      enemyDmg = Math.floor((atkMin + Math.random()*(atkMax-atkMin)) * 0.7);
+      if (gs.playerStatus.shield) { enemyDmg = Math.floor(enemyDmg*0.3); }
+      logMsg = `⚔️ Clash! You deal <span class="dmg-enemy">-${playerDmg} HP</span> and take <span class="dmg-player">-${enemyDmg} HP</span>`;
+      outcome = 'clash';
+    } else {
+      // Enemy healed! You hit full force
+      playerDmg = Math.floor(playerBaseAtk + playerAtkRand);
+      logMsg = `⚔️ <span class="dmg-enemy">Critical strike!</span> You deal <span class="dmg-enemy">-${playerDmg} HP</span> while enemy tries to heal`;
+      outcome = 'win';
+    }
+    // Combo system
+    if (gs.lastPlayerAction === 'attack') {
+      gs.comboCount++;
+      if (gs.comboCount >= 2) {
+        const bonus = gs.comboCount * 5;
+        playerDmg += bonus;
+        gs.stats.combos++;
+        logMsg += ` <span class="log-special">⚡ COMBO x${gs.comboCount}! +${bonus}</span>`;
+        playSound('combo');
+      }
+    } else { gs.comboCount = 0; }
+
+  } else if (action === 'defend') {
+    playSound('defend');
+    if (aiAction === 'attack') {
+      // Perfect block
+      enemyDmg = 0;
+      playerDmg = 0;
+      gs.stats.dodged++;
+      // Counter damage
+      const counter = Math.floor(8 + Math.random()*8);
+      playerDmg = counter;
+      logMsg = `🛡️ <span class="log-special">Perfect Block!</span> You counter for <span class="dmg-enemy">-${counter} HP</span>`;
+      outcome = 'win';
+      gs.stats.aiCorrect++;
+    } else if (aiAction === 'defend') {
+      // Stalemate
+      logMsg = `🛡️ Both parties take defensive stances. <span class="log-info">Stalemate.</span>`;
+      outcome = 'draw';
+    } else {
+      // Enemy healed, you wasted a defend
+      enemyDmg = Math.floor(atkMin*0.5 + Math.random()*5);
+      logMsg = `🛡️ You defend — but enemy heals instead! Light strike for <span class="dmg-player">-${enemyDmg} HP</span>`;
+      outcome = 'lose';
+    }
+    gs.comboCount = 0;
+
+  } else if (action === 'heal') {
+    playSound('heal');
+    gs.healUses--;
+    const healAmt = Math.floor(25 + Math.random()*10);
+    gs.playerHp = Math.min(gs.playerMaxHp, gs.playerHp + healAmt);
+    document.getElementById('healUses').textContent = '×' + gs.healUses;
+    if (aiAction === 'attack') {
+      enemyDmg = Math.floor(atkMin + Math.random()*(atkMax-atkMin));
+      if (gs.playerStatus.shield) enemyDmg = Math.floor(enemyDmg*0.3);
+      logMsg = `💚 You heal <span class="dmg-enemy">+${healAmt} HP</span> but take <span class="dmg-player">-${enemyDmg} HP</span>`;
+      gs.stats.aiCorrect++;
+    } else {
+      logMsg = `💚 You heal <span class="dmg-enemy">+${healAmt} HP</span>. Enemy did not strike.`;
+    }
+    outcome = 'heal';
+    gs.comboCount = 0;
+  }
+
+  // Apply regen
+  if (gs.playerStatus.regen) {
+    const regenAmt = 8;
+    gs.playerHp = Math.min(gs.playerMaxHp, gs.playerHp + regenAmt);
+    logMsg += ` <span class="log-info">⟳ Regen +${regenAmt}</span>`;
+  }
+  // Apply poison
+  if (gs.enemyStatus.poison) {
+    const poisonDmg = 10;
+    playerDmg += poisonDmg;
+    logMsg += ` <span class="dmg-enemy">☠ Poison -${poisonDmg}</span>`;
+  }
+
+  // Apply shield expiry
+  if (gs.playerStatus.shield) {
+    gs.playerStatus.shield--;
+    if (gs.playerStatus.shield <= 0) delete gs.playerStatus.shield;
+  }
+  if (gs.enemyStatus.poison) {
+    gs.enemyStatus.poison--;
+    if (gs.enemyStatus.poison <= 0) delete gs.enemyStatus.poison;
+  }
+  if (gs.playerStatus.regen) {
+    gs.playerStatus.regen--;
+    if (gs.playerStatus.regen <= 0) delete gs.playerStatus.regen;
+  }
+
+  // Apply damage
+  gs.enemyHp = Math.max(0, gs.enemyHp - playerDmg);
+  gs.playerHp = Math.max(0, gs.playerHp - enemyDmg);
+  gs.stats.dmgDealt += playerDmg;
+  gs.stats.dmgTaken += enemyDmg;
+
+  // Update weights (MLP learning)
+  gs.history.push(action);
+  if (gs.history.length > 20) gs.history.shift();
+  updateWeights(action, outcome==='win');
+
+  // Particles
+  if (playerDmg > 0) {
+    const ec = getElemCenter(document.getElementById('enemyCard'));
+    spawnParticles(ec.x, ec.y, '#e05050', 12);
+    showFloatDmg(ec.x, ec.y, `-${playerDmg}`, 'red');
+    document.getElementById('enemyCard').classList.add('flash-damage');
+    setTimeout(()=>document.getElementById('enemyCard').classList.remove('flash-damage'), 350);
+  }
+  if (enemyDmg > 0) {
+    const pc = getElemCenter(document.getElementById('playerCard'));
+    spawnParticles(pc.x, pc.y, '#4a80c0', 10);
+    showFloatDmg(pc.x, pc.y, `-${enemyDmg}`, 'blue');
+    document.getElementById('playerCard').classList.add('flash-damage');
+    setTimeout(()=>document.getElementById('playerCard').classList.remove('flash-damage'), 350);
+    playSound('hit');
+  }
+  if (action === 'heal') {
+    const pc = getElemCenter(document.getElementById('playerCard'));
+    spawnParticles(pc.x, pc.y, '#3aaa5a', 14);
+    showFloatDmg(pc.x, pc.y, '+HEAL', 'green');
+  }
+
+  // Log
+  logEntry(`<span class="round-num">[Rnd ${gs.round}]</span> ${logMsg}`);
+  logEntry(`<span class="log-info">You: ${action.toUpperCase()} | Oracle: ${aiAction.toUpperCase()}</span>`);
+
+  gs.lastPlayerAction = action;
+  gs.round++;
+
+  // Score calculation
+  if (outcome === 'win') {
+    gs.score += (15 + gs.level*5) * (1 + gs.streak*0.1);
+    gs.streak++;
+  } else if (outcome === 'lose') {
+    gs.streak = 0;
+  }
+  gs.score = Math.floor(gs.score);
+
+  updateUI();
+  updatePredictionUI();
+
+  // Check game over
+  if (gs.enemyHp <= 0) {
+    setTimeout(()=>endBattle(true), 400);
+  } else if (gs.playerHp <= 0) {
+    setTimeout(()=>endBattle(false), 400);
+  }
+}
+
+// ====================================================
+// ITEMS
+// ====================================================
+function useItem(item) {
+  if (!gs.gameActive) return;
+  if (gs.inventory[item] <= 0) return;
+
+  gs.inventory[item]--;
+  playSound('item');
+
+  let msg = '';
+  if (item === 'potion') {
+    const amt = Math.floor(40 + Math.random()*20);
+    gs.playerHp = Math.min(gs.playerMaxHp, gs.playerHp + amt);
+    msg = `🧪 <span class="dmg-enemy">Elixir used! Restored +${amt} HP</span>`;
+    const pc = getElemCenter(document.getElementById('playerCard'));
+    spawnParticles(pc.x, pc.y, '#80dd9a', 18);
+    showFloatDmg(pc.x, pc.y, `+${amt}`, 'green');
+  } else if (item === 'bomb') {
+    const dmg = Math.floor(30 + Math.random()*20);
+    gs.enemyHp = Math.max(0, gs.enemyHp - dmg);
+    gs.stats.dmgDealt += dmg;
+    msg = `💣 <span class="dmg-enemy">Bomb explodes for -${dmg} enemy HP!</span>`;
+    const ec = getElemCenter(document.getElementById('enemyCard'));
+    spawnParticles(ec.x, ec.y, '#f0d080', 20);
+    showFloatDmg(ec.x, ec.y, `-${dmg}`, 'gold');
+    document.getElementById('enemyCard').classList.add('flash-damage');
+    setTimeout(()=>document.getElementById('enemyCard').classList.remove('flash-damage'), 350);
+  } else if (item === 'rune') {
+    gs.playerStatus.regen = 3;
+    msg = `🔮 <span class="log-special">Rune activated! Regeneration for 3 turns.</span>`;
+  } else if (item === 'shield') {
+    gs.playerStatus.shield = 3;
+    msg = `🪬 <span class="log-special">Ward active! Damage reduced for 3 turns.</span>`;
+  }
+
+  logEntry(msg);
+  updateUI();
+  updateInventoryUI();
+
+  if (gs.enemyHp <= 0) setTimeout(()=>endBattle(true), 400);
+}
+
+// ====================================================
+// UI UPDATES
+// ====================================================
+function updateUI() {
+  // Player HP
+  const pPct = Math.max(0, (gs.playerHp / gs.playerMaxHp)*100);
+  document.getElementById('playerHpBar').style.width = pPct+'%';
+  document.getElementById('playerHpText').textContent = `${gs.playerHp} / ${gs.playerMaxHp}`;
+  const pBar = document.getElementById('playerHpBar');
+  pBar.classList.toggle('low', pPct < 25);
+
+  // Enemy HP
+  const ePct = Math.max(0, (gs.enemyHp / gs.enemyMaxHp)*100);
+  document.getElementById('enemyHpBar').style.width = ePct+'%';
+  document.getElementById('enemyHpText').textContent = `${gs.enemyHp} / ${gs.enemyMaxHp}`;
+  const eBar = document.getElementById('enemyHpBar');
+  eBar.classList.toggle('low', ePct < 25);
+
+  // Score / round / streak
+  document.getElementById('scoreDisplay').textContent = gs.score.toLocaleString();
+  document.getElementById('winsDisplay').textContent = gs.wins;
+  document.getElementById('roundDisplay').textContent = gs.round;
+  document.getElementById('streakDisplay').textContent = gs.streak;
+  document.getElementById('roundBadge').textContent = `Round ${gs.round}`;
+
+  // Stats
+  document.getElementById('statDmgDealt').textContent = gs.stats.dmgDealt;
+  document.getElementById('statDmgTaken').textContent = gs.stats.dmgTaken;
+  document.getElementById('statDodged').textContent = gs.stats.dodged;
+  const acc = gs.stats.aiTotal > 0 ? Math.round((gs.stats.aiCorrect/gs.stats.aiTotal)*100) : 0;
+  document.getElementById('statAIAcc').textContent = acc + '%';
+  document.getElementById('statCombos').textContent = gs.stats.combos;
+
+  // Status effects
+  renderStatus('playerStatus', gs.playerStatus);
+  renderStatus('enemyStatus', gs.enemyStatus);
+
+  // Heal button
+  document.getElementById('healUses').textContent = '×' + gs.healUses;
+  const healBtn = document.querySelector('.action-btn.heal');
+  if (gs.healUses <= 0) healBtn.classList.add('disabled');
+  else healBtn.classList.remove('disabled');
+}
+
+function renderStatus(id, statuses) {
+  const el = document.getElementById(id);
+  el.innerHTML = '';
+  for (const [key, val] of Object.entries(statuses)) {
+    if (val > 0) {
+      const pill = document.createElement('div');
+      pill.className = `status-pill ${key}`;
+      pill.textContent = key.toUpperCase() + ' ' + val;
+      el.appendChild(pill);
+    }
+  }
+}
+
+function updateInventoryUI() {
+  document.getElementById('potionCount').textContent = '×'+gs.inventory.potion;
+  document.getElementById('bombCount').textContent   = '×'+gs.inventory.bomb;
+  document.getElementById('runeCount').textContent   = '×'+gs.inventory.rune;
+  document.getElementById('shieldCount').textContent = '×'+gs.inventory.shield;
+  document.getElementById('itemPotion').disabled = gs.inventory.potion <= 0;
+  document.getElementById('itemBomb').disabled   = gs.inventory.bomb <= 0;
+  document.getElementById('itemRune').disabled   = gs.inventory.rune <= 0;
+  document.getElementById('itemShield').disabled = gs.inventory.shield <= 0;
+}
+
+// ====================================================
+// COMBAT LOG
+// ====================================================
+function logEntry(html) {
+  const log = document.getElementById('combatLog');
+  const entry = document.createElement('div');
+  entry.className = 'log-entry';
+  entry.innerHTML = html;
+  log.appendChild(entry);
+  log.scrollTop = log.scrollHeight;
+}
+
+function clearLog() {
+  document.getElementById('combatLog').innerHTML = '';
+}
+
+// ====================================================
+// END BATTLE / LEADERBOARD
+// ====================================================
+function endBattle(won) {
+  gs.gameActive = false;
+  document.querySelectorAll('.action-btn').forEach(b=>b.classList.add('disabled'));
+
+  if (won) {
+    gs.wins++;
+    gs.score += 100 + gs.level*50;
+    gs.streak++;
+    playSound('win');
+    const ec = getElemCenter(document.getElementById('enemyCard'));
+    for (let i=0;i<3;i++) setTimeout(()=>spawnParticles(ec.x, ec.y, '#f0d080', 30), i*200);
+  } else {
+    gs.streak = 0;
+    playSound('lose');
+  }
+
+  saveLeaderboard(gs.score);
+
+  const acc = gs.stats.aiTotal > 0 ? Math.round((gs.stats.aiCorrect/gs.stats.aiTotal)*100) : 0;
+  document.getElementById('overlayTitle').textContent = won ? '⚔ Victory!' : '💀 Defeated';
+  document.getElementById('overlayTitle').className = 'overlay-title ' + (won?'win':'lose');
+  document.getElementById('overlaySub').textContent = won
+    ? `You vanquished ${gs.enemy.name}!`
+    : 'The Oracle has foreseen your fall.';
+  document.getElementById('overlayStats').innerHTML = `
+    <div class="o-stat"><div class="o-stat-n">${gs.score.toLocaleString()}</div><div class="o-stat-l">Final Score</div></div>
+    <div class="o-stat"><div class="o-stat-n">${gs.round-1}</div><div class="o-stat-l">Rounds Fought</div></div>
+    <div class="o-stat"><div class="o-stat-n">${acc}%</div><div class="o-stat-l">AI Accuracy</div></div>
+    <div class="o-stat"><div class="o-stat-n">${gs.stats.dmgDealt}</div><div class="o-stat-l">Damage Dealt</div></div>
+  `;
+  document.getElementById('overlay').classList.remove('hidden');
+}
+
+function restartGame() {
+  document.getElementById('overlay').classList.add('hidden');
+  if (gs.wins > 0 && gs.gameActive === false) {
+    // Continue to next level if won last time
+    initGame();
+  } else {
+    gs.score = 0; gs.wins = 0; gs.streak = 0; gs.level = 0; gs.totalRounds = 0;
+    gs.history = []; gs.weights = null;
+    initGame();
+  }
+}
+
+// ====================================================
+// LEADERBOARD (localStorage)
+// ====================================================
+function saveLeaderboard(score) {
+  try {
+    let lb = JSON.parse(localStorage.getItem('bp_leaderboard')||'[]');
+    const name = 'Champion #' + (lb.length+1);
+    lb.push({ name, score, date: new Date().toLocaleDateString() });
+    lb.sort((a,b)=>b.score-a.score);
+    lb = lb.slice(0,10);
+    localStorage.setItem('bp_leaderboard', JSON.stringify(lb));
+  } catch(e){}
+}
+
+function showLeaderboard() {
+  document.getElementById('overlay').classList.add('hidden');
+  try {
+    const lb = JSON.parse(localStorage.getItem('bp_leaderboard')||'[]');
+    const el = document.getElementById('lbContent');
+    if (!lb.length) { el.innerHTML = '<p style="color:var(--text-dim);font-style:italic;text-align:center">No records yet. Fight!</p>'; }
+    else {
+      el.innerHTML = lb.map((e,i)=>`
+        <div style="display:flex;justify-content:space-between;padding:0.3rem 0;border-bottom:1px solid rgba(201,168,76,0.1);font-size:0.85rem">
+          <span style="color:var(--gold);font-family:'Cinzel',serif;width:24px">${i+1}.</span>
+          <span style="flex:1;padding-left:8px;color:var(--text)">${e.name}</span>
+          <span style="color:var(--gold-light);font-family:'Cinzel',serif">${e.score.toLocaleString()}</span>
+        </div>
+      `).join('');
+    }
+  } catch(e) {}
+  document.getElementById('lbOverlay').classList.remove('hidden');
+}
+
+function closeLb() { document.getElementById('lbOverlay').classList.add('hidden'); }
+
+function clearLb() {
+  localStorage.removeItem('bp_leaderboard');
+  showLeaderboard();
+}
+
+// ====================================================
+// START
+// ====================================================
+gs = { score:0, wins:0, streak:0, level:0, totalRounds:0, history:[], weights:null };
+initGame();
+updatePredictionUI();
+</script>
+</body>
+</html>
