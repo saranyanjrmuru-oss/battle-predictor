@@ -1,0 +1,1199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Battle Predictor</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=Cinzel:wght@400;600&family=Crimson+Pro:wght@300;400;600&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --gold:#c9a84c;--gold-light:#f0d080;--gold-dark:#7a5e1a;
+  --blood:#8b1a1a;--blood-light:#c0392b;
+  --dark:#0a0a0e;--panel:#111118;--panel2:#161622;
+  --text:#e8dfc0;--text-dim:#9a8a6a;
+  --mana-light:#4a80c0;--heal-light:#3aaa5a;
+}
+html,body{
+  width:100%;height:100%;overflow:hidden;
+  background:var(--dark);color:var(--text);
+  font-family:'Crimson Pro',Georgia,serif;
+}
+body{
+  background-image:
+    radial-gradient(ellipse at 15% 50%,rgba(139,26,26,0.12) 0%,transparent 55%),
+    radial-gradient(ellipse at 85% 50%,rgba(26,58,106,0.12) 0%,transparent 55%);
+}
+ 
+/* === FIXED CANVAS === */
+#particles{position:fixed;inset:0;pointer-events:none;z-index:0}
+#fx-canvas{position:fixed;inset:0;pointer-events:none;z-index:5}
+ 
+/* === SCREEN FLASH === */
+#screen-flash{
+  position:fixed;inset:0;pointer-events:none;z-index:20;
+  opacity:0;transition:opacity 0.08s;
+}
+ 
+/* === MAIN LAYOUT === */
+#game{
+  position:fixed;inset:0;z-index:1;
+  display:grid;
+  grid-template-rows:auto 1fr auto;
+  grid-template-columns:1fr 2fr 1fr;
+  grid-template-areas:
+    "header header header"
+    "left   center right"
+    "footer footer footer";
+  gap:6px;padding:6px 8px;
+}
+ 
+/* === HEADER === */
+#header{
+  grid-area:header;
+  display:flex;align-items:center;justify-content:space-between;
+  background:var(--panel);border:1px solid rgba(201,168,76,0.2);
+  border-radius:6px;padding:4px 12px;
+}
+.title-text{
+  font-family:'Cinzel Decorative',serif;font-size:clamp(0.75rem,2vw,1.1rem);
+  color:var(--gold);letter-spacing:0.05em;
+  text-shadow:0 0 20px rgba(201,168,76,0.5);
+}
+.score-row{display:flex;gap:16px;align-items:center}
+.sc{text-align:center}
+.sc-n{font-family:'Cinzel',serif;font-size:clamp(0.85rem,1.8vw,1.1rem);color:var(--gold);line-height:1}
+.sc-l{font-size:0.6rem;color:var(--text-dim);font-family:'Cinzel',serif;letter-spacing:0.1em;text-transform:uppercase}
+.sc-sep{width:1px;height:28px;background:rgba(201,168,76,0.2)}
+#soundBtn{
+  background:none;border:1px solid rgba(201,168,76,0.25);border-radius:50%;
+  width:30px;height:30px;cursor:pointer;font-size:0.9rem;color:var(--text);
+  display:flex;align-items:center;justify-content:center;
+  transition:all 0.2s;flex-shrink:0;
+}
+#soundBtn:hover{background:rgba(201,168,76,0.1)}
+ 
+/* === LEFT PANEL — Player === */
+#left{
+  grid-area:left;
+  display:flex;flex-direction:column;gap:6px;
+}
+ 
+/* === RIGHT PANEL — Enemy === */
+#right{
+  grid-area:right;
+  display:flex;flex-direction:column;gap:6px;
+}
+ 
+/* === COMBATANT CARDS === */
+.combatant{
+  background:var(--panel);border:1px solid rgba(201,168,76,0.15);
+  border-radius:8px;padding:8px 10px;position:relative;overflow:hidden;
+  flex:0 0 auto;
+}
+.combatant::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,transparent,var(--gold),transparent);opacity:0.4;
+}
+.c-name{
+  font-family:'Cinzel',serif;font-size:0.7rem;letter-spacing:0.1em;
+  text-transform:uppercase;color:var(--gold);margin-bottom:4px;
+  display:flex;align-items:center;gap:6px;
+}
+.c-icon-big{
+  font-size:clamp(2rem,4vw,3rem);text-align:center;
+  margin:4px 0;display:block;
+  transition:transform 0.3s;
+  filter:drop-shadow(0 2px 8px rgba(0,0,0,0.8));
+}
+/* Attack animation */
+.anim-attack-right{animation:atkR 0.4s ease-out}
+.anim-attack-left {animation:atkL 0.4s ease-out}
+.anim-hit        {animation:hit  0.35s ease-out}
+.anim-heal       {animation:healAnim 0.5s ease-out}
+.anim-defend     {animation:defAnim 0.4s ease-out}
+@keyframes atkR  {0%{transform:translateX(0)}40%{transform:translateX(30px) scale(1.2)}100%{transform:translateX(0)}}
+@keyframes atkL  {0%{transform:translateX(0)}40%{transform:translateX(-30px) scale(1.2)}100%{transform:translateX(0)}}
+@keyframes hit   {0%{transform:translateX(0)}20%{transform:translateX(-8px)}40%{transform:translateX(8px)}60%{transform:translateX(-5px)}100%{transform:translateX(0)}}
+@keyframes healAnim{0%{transform:scale(1)}50%{transform:scale(1.15)}100%{transform:scale(1)}}
+@keyframes defAnim {0%{transform:scale(1)}30%{transform:scale(0.9)}60%{transform:scale(1.05)}100%{transform:scale(1)}}
+ 
+.hp-row{display:flex;justify-content:space-between;font-size:0.65rem;color:var(--text-dim);margin-bottom:3px}
+.hp-track{background:rgba(0,0,0,0.5);border-radius:3px;height:8px;overflow:hidden;border:1px solid rgba(255,255,255,0.05)}
+.hp-fill{height:100%;border-radius:3px;transition:width 0.5s ease}
+.hp-fill.p{background:linear-gradient(90deg,#1e7a4a,#3aaa5a)}
+.hp-fill.e{background:linear-gradient(90deg,#8b1a1a,#c0392b)}
+.hp-fill.low{animation:pulsebar 0.8s infinite}
+@keyframes pulsebar{0%,100%{opacity:1}50%{opacity:0.5}}
+ 
+.status-row{display:flex;flex-wrap:wrap;gap:3px;margin-top:4px;min-height:16px}
+.spill{font-size:0.6rem;padding:1px 5px;border-radius:2px;font-family:'Cinzel',serif}
+.spill.shield{background:rgba(26,58,106,0.5);border:1px solid #4a80c0;color:#9abde0}
+.spill.regen {background:rgba(20,60,30,0.5);border:1px solid #3aaa5a;color:#80dd9a}
+.spill.rage  {background:rgba(139,26,26,0.5);border:1px solid #c0392b;color:#e08080}
+ 
+/* === AI PANEL (in left column) === */
+.ai-panel{
+  background:var(--panel2);border:1px solid rgba(74,128,192,0.25);
+  border-radius:8px;padding:8px 10px;flex:1;overflow:hidden;
+  display:flex;flex-direction:column;gap:4px;
+}
+.ai-title{
+  font-family:'Cinzel',serif;font-size:0.6rem;letter-spacing:0.12em;
+  text-transform:uppercase;color:var(--mana-light);
+  display:flex;align-items:center;gap:5px;margin-bottom:2px;
+}
+.ai-dot{width:5px;height:5px;border-radius:50%;background:var(--mana-light);animation:aiblink 1.4s infinite}
+@keyframes aiblink{0%,100%{opacity:1}50%{opacity:0.15}}
+.pred-item{margin-bottom:3px}
+.pred-lbl{font-size:0.6rem;font-family:'Cinzel',serif;letter-spacing:0.06em;text-transform:uppercase;margin-bottom:2px}
+.pred-lbl.a{color:#e08080}.pred-lbl.d{color:#9abde0}.pred-lbl.h{color:#80dd9a}
+.pred-track{background:rgba(0,0,0,0.4);border-radius:2px;height:6px;overflow:hidden}
+.pred-fill{height:100%;border-radius:2px;transition:width 0.5s ease}
+.pred-fill.a{background:linear-gradient(90deg,#8b1a1a,#e05050)}
+.pred-fill.d{background:linear-gradient(90deg,#1a3a6a,#4a80c0)}
+.pred-fill.h{background:linear-gradient(90deg,#1a4a2a,#3aaa5a)}
+.pred-pct{font-size:0.65rem;float:right;margin-top:-14px;padding-right:2px}
+.pred-pct.a{color:#e08080}.pred-pct.d{color:#9abde0}.pred-pct.h{color:#80dd9a}
+.ai-thought{
+  font-style:italic;font-size:0.72rem;color:var(--text-dim);
+  border-top:1px solid rgba(74,128,192,0.15);padding-top:4px;margin-top:auto;
+  line-height:1.3;
+}
+ 
+/* === STATS PANEL (in right column) === */
+.stats-panel{
+  background:var(--panel);border:1px solid rgba(201,168,76,0.12);
+  border-radius:8px;padding:8px 10px;flex:1;
+}
+.panel-title{
+  font-family:'Cinzel',serif;font-size:0.6rem;letter-spacing:0.12em;
+  text-transform:uppercase;color:var(--gold-dark);
+  border-bottom:1px solid rgba(201,168,76,0.12);padding-bottom:3px;margin-bottom:5px;
+}
+.stat-r{display:flex;justify-content:space-between;font-size:0.7rem;padding:2px 0}
+.stat-l{color:var(--text-dim)}.stat-v{font-weight:600}
+.stat-v.gold{color:var(--gold)}.stat-v.red{color:#e08080}.stat-v.green{color:#80dd9a}
+ 
+/* === INVENTORY (in right column) === */
+.inv-panel{
+  background:var(--panel);border:1px solid rgba(201,168,76,0.12);
+  border-radius:8px;padding:8px 10px;flex:0 0 auto;
+}
+.item-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-top:5px}
+.item-btn{
+  background:rgba(0,0,0,0.3);border:1px solid rgba(201,168,76,0.12);
+  border-radius:4px;padding:4px 6px;font-size:0.7rem;cursor:pointer;
+  color:var(--text);text-align:left;transition:all 0.2s;
+  font-family:'Crimson Pro',serif;display:flex;align-items:center;justify-content:space-between;
+}
+.item-btn:hover:not(:disabled){background:rgba(201,168,76,0.08);border-color:rgba(201,168,76,0.3)}
+.item-btn:disabled{opacity:0.3;cursor:default}
+.item-cnt{font-size:0.6rem;color:var(--gold)}
+ 
+/* === CENTER === */
+#center{
+  grid-area:center;
+  display:flex;flex-direction:column;gap:6px;
+}
+ 
+/* === VS BAR === */
+.vs-bar{
+  display:flex;align-items:center;justify-content:center;gap:10px;
+  flex:0 0 auto;
+}
+.vs-text{font-family:'Cinzel Decorative',serif;font-size:1rem;color:var(--gold);opacity:0.6}
+.round-txt{font-family:'Cinzel',serif;font-size:0.65rem;color:var(--text-dim);letter-spacing:0.1em;text-transform:uppercase}
+ 
+/* === ACTION BUTTONS === */
+.action-row{
+  display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;
+  flex:0 0 auto;
+}
+.act-btn{
+  background:var(--panel);border-radius:8px;padding:8px 4px;
+  cursor:pointer;transition:all 0.15s;text-align:center;
+  border:1px solid rgba(201,168,76,0.15);
+  position:relative;overflow:hidden;user-select:none;
+  -webkit-tap-highlight-color:transparent;
+}
+.act-btn::after{
+  content:'';position:absolute;inset:0;opacity:0;
+  transition:opacity 0.3s;
+}
+.act-btn:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,0,0,0.5)}
+.act-btn:active{transform:scale(0.96)}
+.act-btn.disabled{opacity:0.4;pointer-events:none}
+ 
+.act-btn.attack{border-color:rgba(192,57,43,0.35)}
+.act-btn.attack:hover{background:rgba(139,26,26,0.3);border-color:rgba(192,57,43,0.8)}
+.act-btn.attack::after{background:radial-gradient(circle,rgba(192,57,43,0.4),transparent 70%)}
+.act-btn.defend{border-color:rgba(74,128,192,0.35)}
+.act-btn.defend:hover{background:rgba(26,58,106,0.3);border-color:rgba(74,128,192,0.8)}
+.act-btn.defend::after{background:radial-gradient(circle,rgba(74,128,192,0.4),transparent 70%)}
+.act-btn.heal{border-color:rgba(58,170,90,0.35)}
+.act-btn.heal:hover{background:rgba(26,74,42,0.3);border-color:rgba(58,170,90,0.8)}
+.act-btn.heal::after{background:radial-gradient(circle,rgba(58,170,90,0.4),transparent 70%)}
+ 
+/* Button glow on click */
+.act-btn.glow-red::after  {opacity:1}
+.act-btn.glow-blue::after {opacity:1}
+.act-btn.glow-green::after{opacity:1}
+ 
+.btn-icon{font-size:clamp(1.4rem,3vw,2rem);display:block;margin-bottom:2px}
+.btn-name{font-family:'Cinzel',serif;font-size:clamp(0.6rem,1.2vw,0.75rem);letter-spacing:0.08em;text-transform:uppercase;display:block}
+.btn-name.a{color:#e08080}.btn-name.d{color:#9abde0}.btn-name.h{color:#80dd9a}
+.btn-desc{font-size:0.6rem;color:var(--text-dim);display:block;margin-top:1px;font-style:italic}
+.heal-uses{position:absolute;top:4px;right:6px;font-size:0.6rem;color:#80dd9a;font-family:'Cinzel',serif}
+ 
+/* === COMBAT LOG === */
+.log-area{
+  background:var(--panel);border:1px solid rgba(201,168,76,0.1);
+  border-radius:8px;padding:6px 10px;
+  flex:1;overflow-y:auto;overflow-x:hidden;
+  scrollbar-width:thin;scrollbar-color:rgba(201,168,76,0.2) transparent;
+}
+.log-area::-webkit-scrollbar{width:3px}
+.log-area::-webkit-scrollbar-thumb{background:rgba(201,168,76,0.2);border-radius:2px}
+.log-entry{
+  font-size:0.72rem;line-height:1.5;padding:1px 0;
+  border-bottom:1px solid rgba(255,255,255,0.025);
+  animation:fadeIn 0.25s ease;
+}
+@keyframes fadeIn{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:translateY(0)}}
+.rn{color:var(--gold-dark);font-family:'Cinzel',serif;font-size:0.62rem}
+.dp{color:#e08080;font-weight:600}.de{color:#80dd9a;font-weight:600}
+.ls{color:var(--gold);font-style:italic}.li{color:var(--text-dim)}
+ 
+/* === FOOTER === */
+#footer{
+  grid-area:footer;
+  display:flex;align-items:center;justify-content:center;gap:12px;
+  background:var(--panel);border:1px solid rgba(201,168,76,0.1);
+  border-radius:6px;padding:3px 12px;
+}
+.streak-badge{
+  font-family:'Cinzel',serif;font-size:0.65rem;letter-spacing:0.08em;
+  text-transform:uppercase;color:var(--text-dim);display:flex;align-items:center;gap:6px;
+}
+.streak-num{color:var(--gold);font-size:0.9rem;font-weight:600}
+.ai-acc-txt{font-family:'Cinzel',serif;font-size:0.65rem;color:var(--text-dim)}
+.ai-acc-val{color:var(--mana-light);font-weight:600}
+ 
+/* === OVERLAYS === */
+.overlay{
+  position:fixed;inset:0;background:rgba(0,0,0,0.88);
+  display:flex;align-items:center;justify-content:center;
+  z-index:100;backdrop-filter:blur(6px);
+}
+.overlay.hidden{display:none}
+.overlay-box{
+  background:var(--panel2);border:1px solid rgba(201,168,76,0.4);
+  border-radius:12px;padding:2rem 1.8rem;text-align:center;
+  max-width:340px;width:90%;position:relative;
+}
+.overlay-box::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:3px;
+  border-radius:12px 12px 0 0;
+  background:linear-gradient(90deg,transparent,var(--gold),transparent);
+}
+.ov-title{font-family:'Cinzel Decorative',serif;font-size:1.5rem;margin-bottom:0.4rem}
+.ov-title.win{color:var(--gold);text-shadow:0 0 30px rgba(201,168,76,0.6)}
+.ov-title.lose{color:var(--blood-light);text-shadow:0 0 30px rgba(139,26,26,0.6)}
+.ov-sub{font-size:0.9rem;color:var(--text-dim);font-style:italic;margin-bottom:1.2rem}
+.ov-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:1.2rem}
+.ov-s{background:rgba(0,0,0,0.3);border-radius:4px;padding:8px;border:1px solid rgba(201,168,76,0.1)}
+.ov-sn{font-family:'Cinzel',serif;font-size:1rem;color:var(--gold)}
+.ov-sl{font-size:0.65rem;color:var(--text-dim);font-style:italic}
+.ov-btn{
+  background:rgba(201,168,76,0.1);border:1px solid rgba(201,168,76,0.4);
+  border-radius:6px;padding:8px 20px;font-family:'Cinzel',serif;
+  font-size:0.8rem;letter-spacing:0.1em;text-transform:uppercase;
+  color:var(--gold);cursor:pointer;transition:all 0.2s;margin:3px;
+}
+.ov-btn:hover{background:rgba(201,168,76,0.2);transform:translateY(-1px)}
+ 
+/* === FLOATING DAMAGE === */
+.fdmg{
+  position:fixed;font-family:'Cinzel Decorative',serif;
+  font-size:clamp(1rem,2.5vw,1.5rem);font-weight:900;pointer-events:none;
+  z-index:50;animation:floatUp 1.1s ease-out forwards;
+  text-shadow:0 2px 8px rgba(0,0,0,0.9);
+}
+.fdmg.r{color:#ff4444}.fdmg.g{color:#44ff88}.fdmg.b{color:#4499ff}.fdmg.gold{color:#f0d080}
+@keyframes floatUp{
+  0%  {opacity:1;transform:translateY(0) scale(1)}
+  60% {opacity:1;transform:translateY(-55px) scale(1.3)}
+  100%{opacity:0;transform:translateY(-90px) scale(0.8)}
+}
+ 
+/* === CARD FLASH FX === */
+.flash-dmg {animation:fDmg 0.4s ease}
+.flash-heal{animation:fHeal 0.4s ease}
+.flash-blk {animation:fBlk 0.4s ease}
+@keyframes fDmg {0%{filter:brightness(1)}35%{filter:brightness(2.5) sepia(1) saturate(8) hue-rotate(-20deg)}100%{filter:brightness(1)}}
+@keyframes fHeal{0%{filter:brightness(1)}35%{filter:brightness(2) sepia(1) saturate(5) hue-rotate(90deg)}100%{filter:brightness(1)}}
+@keyframes fBlk {0%{filter:brightness(1)}35%{filter:brightness(2) sepia(1) saturate(4) hue-rotate(180deg)}100%{filter:brightness(1)}}
+ 
+/* === BATTLE SCENE CENTER GFX === */
+#battle-scene{
+  flex:1;position:relative;
+  display:flex;align-items:center;justify-content:center;
+  overflow:hidden;border-radius:8px;
+  background:radial-gradient(ellipse at 50% 50%,rgba(30,10,10,0.8),var(--dark));
+  border:1px solid rgba(201,168,76,0.08);
+}
+/* Sword clash graphic */
+#clash-fx{
+  position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  pointer-events:none;z-index:2;opacity:0;transition:opacity 0.1s;
+}
+.clash-ring{
+  width:80px;height:80px;border-radius:50%;border:3px solid;
+  position:absolute;animation:clashRing 0.5s ease-out forwards;
+}
+@keyframes clashRing{
+  0%  {transform:scale(0.3);opacity:1}
+  100%{transform:scale(3);opacity:0}
+}
+.clash-spark{
+  position:absolute;width:4px;height:4px;border-radius:50%;
+  animation:sparkFly 0.5s ease-out forwards;
+}
+@keyframes sparkFly{
+  0%  {transform:translate(0,0) scale(1);opacity:1}
+  100%{opacity:0}
+}
+ 
+/* Big action word */
+#action-word{
+  position:absolute;font-family:'Cinzel Decorative',serif;
+  font-size:clamp(1.5rem,4vw,2.5rem);font-weight:700;
+  pointer-events:none;z-index:3;
+  opacity:0;text-align:center;
+  text-shadow:0 0 20px currentColor, 0 2px 8px rgba(0,0,0,0.9);
+  animation:none;
+}
+.aw-show{animation:awAnim 0.9s ease-out forwards!important}
+@keyframes awAnim{
+  0%  {opacity:0;transform:scale(0.5)}
+  25% {opacity:1;transform:scale(1.1)}
+  60% {opacity:1;transform:scale(1)}
+  100%{opacity:0;transform:scale(0.9) translateY(-20px)}
+}
+ 
+/* Scene fighters */
+.scene-fighter{
+  font-size:clamp(3rem,7vw,5rem);
+  filter:drop-shadow(0 4px 16px rgba(0,0,0,0.9));
+  z-index:1;position:relative;
+  transition:transform 0.15s;
+  user-select:none;
+}
+#sf-left {transform:scaleX(1)}
+#sf-right{transform:scaleX(-1)}
+.scene-vs{
+  font-family:'Cinzel Decorative',serif;
+  font-size:clamp(0.8rem,1.5vw,1rem);color:rgba(201,168,76,0.4);
+  margin:0 12px;z-index:1;
+}
+</style>
+</head>
+<body>
+ 
+<canvas id="particles"></canvas>
+<canvas id="fx-canvas"></canvas>
+<div id="screen-flash"></div>
+ 
+<!-- Game Over Overlay -->
+<div class="overlay hidden" id="overlay">
+  <div class="overlay-box">
+    <div class="ov-title" id="ovTitle"></div>
+    <div class="ov-sub" id="ovSub"></div>
+    <div class="ov-stats" id="ovStats"></div>
+    <button class="ov-btn" onclick="restartGame()">⚔ Play Again</button>
+    <button class="ov-btn" onclick="nextLevel()">▶ Next Level</button>
+  </div>
+</div>
+ 
+<!-- Main Layout -->
+<div id="game">
+ 
+  <!-- HEADER -->
+  <div id="header">
+    <div class="title-text">⚔ Battle Predictor</div>
+    <div class="score-row">
+      <div class="sc"><div class="sc-n" id="scoreD">0</div><div class="sc-l">Score</div></div>
+      <div class="sc-sep"></div>
+      <div class="sc"><div class="sc-n" id="winsD">0</div><div class="sc-l">Wins</div></div>
+      <div class="sc-sep"></div>
+      <div class="sc"><div class="sc-n" id="roundD">1</div><div class="sc-l">Round</div></div>
+      <div class="sc-sep"></div>
+      <div class="sc"><div class="sc-n" id="streakD">0</div><div class="sc-l">Streak</div></div>
+    </div>
+    <button id="soundBtn" onclick="toggleSound()">🔊</button>
+  </div>
+ 
+  <!-- LEFT COLUMN -->
+  <div id="left">
+    <!-- Player card -->
+    <div class="combatant" id="playerCard">
+      <div class="c-name">🧙 The Champion</div>
+      <span class="c-icon-big" id="playerIcon">🧙‍♂️</span>
+      <div class="hp-row"><span>HP</span><span id="pHpTxt">100/100</span></div>
+      <div class="hp-track"><div class="hp-fill p" id="pHpBar" style="width:100%"></div></div>
+      <div class="status-row" id="pStatus"></div>
+    </div>
+ 
+    <!-- AI Prediction -->
+    <div class="ai-panel">
+      <div class="ai-title"><div class="ai-dot"></div>Oracle Prediction</div>
+      <div class="pred-item">
+        <div class="pred-lbl a">⚔ Attack</div>
+        <div class="pred-track"><div class="pred-fill a" id="paA" style="width:33%"></div></div>
+        <div class="pred-pct a" id="ppA">33%</div>
+      </div>
+      <div class="pred-item">
+        <div class="pred-lbl d">🛡 Defend</div>
+        <div class="pred-track"><div class="pred-fill d" id="paD" style="width:33%"></div></div>
+        <div class="pred-pct d" id="ppD">33%</div>
+      </div>
+      <div class="pred-item">
+        <div class="pred-lbl h">💚 Heal</div>
+        <div class="pred-track"><div class="pred-fill h" id="paH" style="width:33%"></div></div>
+        <div class="pred-pct h" id="ppH">33%</div>
+      </div>
+      <div class="ai-thought" id="aiThought"><em>"I watch. I learn. I predict."</em></div>
+    </div>
+  </div>
+ 
+  <!-- CENTER COLUMN -->
+  <div id="center">
+ 
+    <!-- Battle scene -->
+    <div id="battle-scene">
+      <div class="scene-fighter" id="sf-left">🧙‍♂️</div>
+      <div class="scene-vs">VS</div>
+      <div class="scene-fighter" id="sf-right">👹</div>
+ 
+      <!-- Clash FX container -->
+      <div id="clash-fx"></div>
+      <!-- Big action word -->
+      <div id="action-word"></div>
+    </div>
+ 
+    <!-- VS bar -->
+    <div class="vs-bar">
+      <div class="round-txt" id="roundBadge">Round 1</div>
+      <div class="vs-text">·</div>
+      <div class="round-txt" id="enemyNameD">vs The Oracle</div>
+    </div>
+ 
+    <!-- Action buttons -->
+    <div class="action-row">
+      <div class="act-btn attack" id="btnAttack" onclick="playerAction('attack')">
+        <span class="btn-icon">⚔️</span>
+        <span class="btn-name a">Attack</span>
+        <span class="btn-desc">15–25 dmg</span>
+      </div>
+      <div class="act-btn defend" id="btnDefend" onclick="playerAction('defend')">
+        <span class="btn-icon">🛡️</span>
+        <span class="btn-name d">Defend</span>
+        <span class="btn-desc">Block + counter</span>
+      </div>
+      <div class="act-btn heal" id="btnHeal" onclick="playerAction('heal')">
+        <span class="btn-icon">💚</span>
+        <span class="btn-name h">Heal</span>
+        <span class="btn-desc">+25–35 HP</span>
+        <span class="heal-uses" id="healUsesD">×3</span>
+      </div>
+    </div>
+ 
+    <!-- Combat log -->
+    <div class="log-area" id="combatLog"></div>
+ 
+  </div>
+ 
+  <!-- RIGHT COLUMN -->
+  <div id="right">
+    <!-- Enemy card -->
+    <div class="combatant" id="enemyCard">
+      <div class="c-name" id="eNameD">👹 The Oracle</div>
+      <span class="c-icon-big" id="enemyIcon">👹</span>
+      <div class="hp-row"><span>HP</span><span id="eHpTxt">100/100</span></div>
+      <div class="hp-track"><div class="hp-fill e" id="eHpBar" style="width:100%"></div></div>
+      <div class="status-row" id="eStatus"></div>
+    </div>
+ 
+    <!-- Stats -->
+    <div class="stats-panel">
+      <div class="panel-title">⚔ Stats</div>
+      <div class="stat-r"><span class="stat-l">Dmg Dealt</span><span class="stat-v red" id="sDmgD">0</span></div>
+      <div class="stat-r"><span class="stat-l">Dmg Taken</span><span class="stat-v red" id="sDmgT">0</span></div>
+      <div class="stat-r"><span class="stat-l">Dodged</span><span class="stat-v green" id="sDodge">0</span></div>
+      <div class="stat-r"><span class="stat-l">AI Accuracy</span><span class="stat-v gold" id="sAcc">0%</span></div>
+      <div class="stat-r"><span class="stat-l">Combos</span><span class="stat-v gold" id="sCombos">0</span></div>
+    </div>
+ 
+    <!-- Inventory -->
+    <div class="inv-panel">
+      <div class="panel-title">🎒 Inventory</div>
+      <div class="item-grid">
+        <button class="item-btn" id="itmPotion" onclick="useItem('potion')">🧪 Elixir <span class="item-cnt" id="cntPotion">×2</span></button>
+        <button class="item-btn" id="itmBomb"   onclick="useItem('bomb')">💣 Bomb <span class="item-cnt" id="cntBomb">×2</span></button>
+        <button class="item-btn" id="itmRune"   onclick="useItem('rune')">🔮 Rune <span class="item-cnt" id="cntRune">×1</span></button>
+        <button class="item-btn" id="itmShield" onclick="useItem('shield')">🪬 Ward <span class="item-cnt" id="cntShield">×1</span></button>
+      </div>
+    </div>
+  </div>
+ 
+  <!-- FOOTER -->
+  <div id="footer">
+    <div class="streak-badge">🔥 Streak <span class="streak-num" id="streakF">0</span></div>
+    <div class="sc-sep"></div>
+    <div class="ai-acc-txt">AI Accuracy: <span class="ai-acc-val" id="accF">0%</span></div>
+    <div class="sc-sep"></div>
+    <div class="streak-badge" id="levelBadge" style="color:var(--gold)">Level 1 — The Oracle</div>
+  </div>
+ 
+</div>
+ 
+<script>
+/* ============================================================
+   AUDIO ENGINE
+============================================================ */
+let audioCtx=null,soundOn=true;
+function getAC(){if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)();return audioCtx}
+function playSound(t){
+  if(!soundOn)return;
+  try{
+    const c=getAC(),g=c.createGain();g.connect(c.destination);
+    const cfg={
+      attack: ()=>tone(c,g,[220,160,120],[0,.05,.22],.35,'sawtooth'),
+      defend: ()=>tone(c,g,[440,480,380],[0,.04,.28],.28,'square'),
+      heal:   ()=>tone(c,g,[330,440,550,440],[0,.1,.2,.35],.25,'sine'),
+      hit:    ()=>tone(c,g,[140,90,70],[0,.04,.18],.45,'sawtooth'),
+      block:  ()=>tone(c,g,[300,360,280],[0,.03,.15],.3,'square'),
+      item:   ()=>tone(c,g,[660,770,880],[0,.08,.22],.22,'sine'),
+      win:    ()=>fanfare(c,g),
+      lose:   ()=>dirge(c,g),
+      combo:  ()=>tone(c,g,[440,550,660,880],[0,.05,.1,.18],.3,'square'),
+      level:  ()=>levelup(c,g),
+      predict:()=>tone(c,g,[200,210],[0,.1],.08,'sine'),
+      clash:  ()=>{tone(c,g,[180,150,100],[0,.03,.15],.4,'sawtooth');tone(c,g,[350,300],[0,.05],.2,'square')},
+    };
+    if(cfg[t])cfg[t]();
+  }catch(e){}
+}
+function tone(c,g,fs,ts,vol,type){
+  const o=c.createOscillator(),gn=c.createGain();
+  o.type=type;gn.gain.setValueAtTime(vol,c.currentTime);
+  gn.gain.exponentialRampToValueAtTime(0.001,c.currentTime+ts[ts.length-1]+.05);
+  o.connect(gn);gn.connect(g);
+  fs.forEach((f,i)=>o.frequency.setValueAtTime(f,c.currentTime+ts[i]));
+  o.start(c.currentTime);o.stop(c.currentTime+ts[ts.length-1]+.1);
+}
+function fanfare(c,g){[523,659,784,1047].forEach((f,i)=>{const o=c.createOscillator(),gn=c.createGain();o.type='square';o.frequency.value=f;gn.gain.setValueAtTime(.2,c.currentTime+i*.15);gn.gain.exponentialRampToValueAtTime(.001,c.currentTime+i*.15+.4);o.connect(gn);gn.connect(g);o.start(c.currentTime+i*.15);o.stop(c.currentTime+i*.15+.5)})}
+function dirge(c,g){[220,196,174,164].forEach((f,i)=>{const o=c.createOscillator(),gn=c.createGain();o.type='sine';o.frequency.value=f;gn.gain.setValueAtTime(.18,c.currentTime+i*.25);gn.gain.exponentialRampToValueAtTime(.001,c.currentTime+i*.25+.5);o.connect(gn);gn.connect(g);o.start(c.currentTime+i*.25);o.stop(c.currentTime+i*.25+.6)})}
+function levelup(c,g){[392,523,659,784,1047].forEach((f,i)=>{const o=c.createOscillator(),gn=c.createGain();o.type='square';o.frequency.value=f;gn.gain.setValueAtTime(.15,c.currentTime+i*.08);gn.gain.exponentialRampToValueAtTime(.001,c.currentTime+i*.08+.2);o.connect(gn);gn.connect(g);o.start(c.currentTime+i*.08);o.stop(c.currentTime+i*.08+.25)})}
+function toggleSound(){soundOn=!soundOn;document.getElementById('soundBtn').textContent=soundOn?'🔊':'🔇'}
+ 
+/* ============================================================
+   PARTICLES
+============================================================ */
+const pc=document.getElementById('particles');
+const pctx=pc.getContext('2d');
+let parts=[];
+function resizePC(){pc.width=window.innerWidth;pc.height=window.innerHeight}
+resizePC();window.addEventListener('resize',resizePC);
+function spawnP(x,y,col,n=12){
+  for(let i=0;i<n;i++)parts.push({x,y,vx:(Math.random()-.5)*6,vy:(Math.random()-2)*5,life:1,decay:.025+Math.random()*.035,size:3+Math.random()*5,col});
+}
+function animP(){
+  pctx.clearRect(0,0,pc.width,pc.height);
+  parts=parts.filter(p=>p.life>0);
+  parts.forEach(p=>{
+    pctx.save();pctx.globalAlpha=p.life;pctx.fillStyle=p.col;
+    pctx.beginPath();pctx.arc(p.x,p.y,p.size,0,Math.PI*2);pctx.fill();pctx.restore();
+    p.x+=p.vx;p.y+=p.vy;p.vy+=.12;p.life-=p.decay;
+  });
+  requestAnimationFrame(animP);
+}
+animP();
+ 
+/* ============================================================
+   FX CANVAS (lightning/beam effects)
+============================================================ */
+const fc=document.getElementById('fx-canvas');
+const fctx=fc.getContext('2d');
+function resizeFC(){fc.width=window.innerWidth;fc.height=window.innerHeight}
+resizeFC();window.addEventListener('resize',resizeFC);
+ 
+function drawLightning(x1,y1,x2,y2,col,steps=8){
+  fctx.clearRect(0,0,fc.width,fc.height);
+  fctx.strokeStyle=col;fctx.lineWidth=2;fctx.shadowColor=col;fctx.shadowBlur=12;
+  fctx.beginPath();fctx.moveTo(x1,y1);
+  let cx=x1,cy=y1;
+  for(let i=0;i<steps;i++){
+    cx+=(x2-x1)/steps+(Math.random()-.5)*30;
+    cy+=(y2-y1)/steps+(Math.random()-.5)*30;
+    fctx.lineTo(cx,cy);
+  }
+  fctx.lineTo(x2,y2);fctx.stroke();
+  fctx.shadowBlur=0;
+  setTimeout(()=>fctx.clearRect(0,0,fc.width,fc.height),250);
+}
+ 
+function drawHealBeam(x,y){
+  fctx.clearRect(0,0,fc.width,fc.height);
+  for(let i=0;i<6;i++){
+    const angle=Math.random()*Math.PI*2;
+    const len=30+Math.random()*60;
+    fctx.strokeStyle='rgba(58,170,90,0.8)';
+    fctx.lineWidth=2;fctx.shadowColor='#3aaa5a';fctx.shadowBlur=10;
+    fctx.beginPath();fctx.moveTo(x,y);
+    fctx.lineTo(x+Math.cos(angle)*len,y+Math.sin(angle)*len);
+    fctx.stroke();
+  }
+  fctx.shadowBlur=0;
+  setTimeout(()=>fctx.clearRect(0,0,fc.width,fc.height),300);
+}
+ 
+/* ============================================================
+   SCREEN FLASH
+============================================================ */
+function screenFlash(col){
+  const sf=document.getElementById('screen-flash');
+  sf.style.background=col;sf.style.opacity='0.35';
+  setTimeout(()=>sf.style.opacity='0',120);
+}
+ 
+/* ============================================================
+   FLOATING DAMAGE
+============================================================ */
+function floatDmg(x,y,txt,cls){
+  const el=document.createElement('div');
+  el.className=`fdmg ${cls}`;el.textContent=txt;
+  el.style.left=(x-15)+'px';el.style.top=(y-10)+'px';
+  document.body.appendChild(el);
+  setTimeout(()=>el.remove(),1200);
+}
+ 
+function elCenter(el){const r=el.getBoundingClientRect();return{x:r.left+r.width/2,y:r.top+r.height/2}}
+ 
+/* ============================================================
+   BIG ACTION WORD
+============================================================ */
+function showActionWord(txt,col){
+  const aw=document.getElementById('action-word');
+  aw.textContent=txt;aw.style.color=col;
+  aw.classList.remove('aw-show');
+  void aw.offsetWidth; // reflow
+  aw.classList.add('aw-show');
+}
+ 
+/* ============================================================
+   CLASH FX
+============================================================ */
+function showClash(col='#ff8844'){
+  const cf=document.getElementById('clash-fx');
+  cf.innerHTML='';cf.style.opacity='1';
+ 
+  // Ring
+  const ring=document.createElement('div');
+  ring.className='clash-ring';
+  ring.style.borderColor=col;ring.style.boxShadow=`0 0 20px ${col}`;
+  cf.appendChild(ring);
+ 
+  // Sparks
+  for(let i=0;i<12;i++){
+    const sp=document.createElement('div');
+    sp.className='clash-spark';
+    sp.style.background=col;
+    const angle=Math.random()*360;
+    const dist=30+Math.random()*60;
+    sp.style.setProperty('--tx',`${Math.cos(angle*Math.PI/180)*dist}px`);
+    sp.style.setProperty('--ty',`${Math.sin(angle*Math.PI/180)*dist}px`);
+    sp.style.animationName='none';
+    sp.style.left='50%';sp.style.top='50%';
+    cf.appendChild(sp);
+    // animate manually
+    sp.animate([
+      {transform:'translate(-50%,-50%) translate(0,0)',opacity:1},
+      {transform:`translate(-50%,-50%) translate(${Math.cos(angle*Math.PI/180)*dist}px,${Math.sin(angle*Math.PI/180)*dist}px)`,opacity:0}
+    ],{duration:500,easing:'ease-out',fill:'forwards'});
+  }
+ 
+  setTimeout(()=>{cf.style.opacity='0';cf.innerHTML=''},550);
+}
+ 
+/* ============================================================
+   SCENE FIGHTER ANIMATIONS
+============================================================ */
+function animFighter(id,anim){
+  const el=document.getElementById(id);
+  el.classList.remove('anim-attack-right','anim-attack-left','anim-hit','anim-heal','anim-defend');
+  void el.offsetWidth;
+  el.classList.add(anim);
+  setTimeout(()=>el.classList.remove(anim),500);
+}
+ 
+/* ============================================================
+   GAME STATE
+============================================================ */
+const ACTIONS=['attack','defend','heal'];
+const COUNTER={attack:'defend',defend:'attack',heal:'attack'};
+const AI_IDX={attack:0,defend:1,heal:2};
+const ENEMIES=[
+  {name:'The Oracle',   icon:'👹',hp:100,atk:[14,22],def:.35},
+  {name:'Blood Wyrm',  icon:'🐉',hp:120,atk:[18,28],def:.25},
+  {name:'Shadow Witch',icon:'🧟',hp:90, atk:[20,30],def:.4},
+  {name:'Iron Golem',  icon:'🤖',hp:140,atk:[12,20],def:.5},
+  {name:'Soul Reaper', icon:'💀',hp:110,atk:[22,32],def:.3},
+];
+ 
+let gs={};
+ 
+function initGame(fullReset){
+  if(fullReset){
+    gs={score:0,wins:0,streak:0,level:0,history:[],weights:null,totalRounds:0};
+  }
+  const lvl=(gs.level||0)+1;
+  const ec=ENEMIES[(lvl-1)%ENEMIES.length];
+  const hpBonus=(lvl-1)*15;
+ 
+  gs={
+    ...gs,
+    level:lvl,
+    round:1,
+    playerHp:100+Math.floor((gs.level||0)*5),
+    playerMaxHp:100+Math.floor((gs.level||0)*5),
+    enemyHp:ec.hp+hpBonus,
+    enemyMaxHp:ec.hp+hpBonus,
+    enemy:ec,
+    healUses:3,
+    pStatus:{},eStatus:{},
+    inventory:{potion:2,bomb:2,rune:1,shield:1},
+    history:gs.history||[],
+    weights:gs.weights||{attack:[.33,.33,.33],defend:[.33,.33,.33],heal:[.33,.33,.33]},
+    stats:{dmgDealt:0,dmgTaken:0,dodged:0,aiCorrect:0,aiTotal:0,combos:0},
+    lastAction:null,comboCount:0,
+    gameActive:true,
+  };
+ 
+  document.getElementById('sf-right').textContent=gs.enemy.icon;
+  document.getElementById('enemyIcon').textContent=gs.enemy.icon;
+  document.getElementById('eNameD').textContent=gs.enemy.icon+' '+gs.enemy.name;
+  document.getElementById('enemyNameD').textContent='vs '+gs.enemy.name;
+  document.getElementById('levelBadge').textContent='Level '+lvl+' — '+gs.enemy.name;
+ 
+  enableBtns();updateUI();updateInv();clearLog();
+  log(`<span class="ls">⚔ Level ${lvl}: ${gs.enemy.icon} ${gs.enemy.name} appears!</span>`);
+  log(`<span class="li">Choose your first action.</span>`);
+  if(lvl>1)playSound('level');
+}
+ 
+/* ============================================================
+   MLP ENGINE
+============================================================ */
+function updateWeights(action){
+  const row=gs.weights[action],lr=0.15;
+  row[AI_IDX[action]]+=lr;
+  const s=row.reduce((a,b)=>a+b,0);
+  gs.weights[action]=row.map(v=>v/s);
+}
+ 
+function getPrediction(){
+  const hist=gs.history.slice(-6);
+  if(!hist.length)return[.33,.33,.33];
+  let p=[0,0,0];
+  hist.forEach((h,i)=>{const w=i+1;gs.weights[h].forEach((v,j)=>p[j]+=v*w)});
+  const s=p.reduce((a,b)=>a+b,0);
+  return p.map(v=>v/s);
+}
+ 
+function aiChoose(){
+  const probs=getPrediction();
+  const pidx=probs.indexOf(Math.max(...probs));
+  const conf=Math.max(...probs);
+  if(Math.random()<conf*1.2)return COUNTER[ACTIONS[pidx]];
+  return ACTIONS[Math.floor(Math.random()*3)];
+}
+ 
+function updatePredUI(){
+  const p=getPrediction();
+  const pcts=p.map(v=>Math.round(v*100));
+  document.getElementById('paA').style.width=pcts[0]+'%';
+  document.getElementById('paD').style.width=pcts[1]+'%';
+  document.getElementById('paH').style.width=pcts[2]+'%';
+  document.getElementById('ppA').textContent=pcts[0]+'%';
+  document.getElementById('ppD').textContent=pcts[1]+'%';
+  document.getElementById('ppH').textContent=pcts[2]+'%';
+  const mi=p.indexOf(Math.max(...p));
+  const thougs=[
+    `"Your ${ACTIONS[mi]} is foretold, warrior."`,
+    `"${pcts[mi]}% — you are predictable."`,
+    `"I sense ${ACTIONS[mi]} in your next breath."`,
+    `"The pattern reveals itself."`,
+    `"You cannot hide your intentions."`,
+  ];
+  document.getElementById('aiThought').innerHTML=`<em>${thougs[Math.floor(Math.random()*thougs.length)]}</em>`;
+}
+ 
+/* ============================================================
+   MAIN ACTION
+============================================================ */
+function playerAction(action){
+  if(!gs.gameActive)return;
+  if(action==='heal'&&gs.healUses<=0){log(`<span class="li">No heal charges left!</span>`);return;}
+ 
+  disableBtns();
+  setTimeout(()=>{if(gs.gameActive)enableBtns()},750);
+ 
+  const ai=aiChoose();
+  gs.stats.aiTotal++;
+ 
+  let pDmg=0,eDmg=0,logMsg='',outcome='';
+  const atkMin=gs.enemy.atk[0],atkMax=gs.enemy.atk[1];
+  let baseAtk=15+(gs.level-1)*3+(gs.pStatus.rage?Math.floor((15+(gs.level-1)*3)*.5):0);
+  let rndAtk=Math.floor(Math.random()*10);
+ 
+  /* --- ATTACK --- */
+  if(action==='attack'){
+    playSound('attack');
+    if(ai==='defend'){
+      eDmg=Math.floor((atkMin+Math.random()*(atkMax-atkMin))*(gs.pStatus.shield?.3:.5));
+      logMsg=`⚔️ You strike — <span class="dp">BLOCKED!</span> Counter <span class="dp">-${eDmg} HP</span>`;
+      outcome='lose';gs.stats.aiCorrect++;
+      // FX: block
+      doBlockFX();
+      showActionWord('BLOCKED!','#4a80c0');
+    } else if(ai==='attack'){
+      pDmg=Math.floor(baseAtk+rndAtk);
+      eDmg=Math.floor((atkMin+Math.random()*(atkMax-atkMin))*.7*(gs.pStatus.shield?.3:1));
+      logMsg=`⚔️ Clash! Deal <span class="de">-${pDmg}</span> take <span class="dp">-${eDmg}</span>`;
+      outcome='clash';
+      doClashFX();
+      showActionWord('CLASH!','#ff8844');
+    } else {
+      pDmg=Math.floor(baseAtk+rndAtk);
+      logMsg=`⚔️ <span class="de">Critical hit!</span> Dealt <span class="de">-${pDmg} HP</span>`;
+      outcome='win';
+      doAttackFX();
+      showActionWord('CRITICAL!','#ff4444');
+    }
+    // Combo
+    if(gs.lastAction==='attack'){
+      gs.comboCount++;
+      if(gs.comboCount>=2){
+        const b=gs.comboCount*5;pDmg+=b;gs.stats.combos++;
+        logMsg+=` <span class="ls">⚡COMBO x${gs.comboCount}+${b}</span>`;
+        playSound('combo');showActionWord(`COMBO x${gs.comboCount}!`,'#f0d080');
+      }
+    } else gs.comboCount=0;
+ 
+  /* --- DEFEND --- */
+  } else if(action==='defend'){
+    playSound('defend');
+    if(ai==='attack'){
+      const ctr=Math.floor(8+Math.random()*8);pDmg=ctr;
+      gs.stats.dodged++;
+      logMsg=`🛡️ <span class="ls">Perfect Block!</span> Counter <span class="de">-${ctr} HP</span>`;
+      outcome='win';gs.stats.aiCorrect++;
+      doDefendFX();showActionWord('PERFECT!','#4a80c0');
+    } else if(ai==='defend'){
+      logMsg=`🛡️ Both defend. <span class="li">Stalemate.</span>`;
+      outcome='draw';
+      showActionWord('STALEMATE','#888');
+    } else {
+      eDmg=Math.floor(atkMin*.45+Math.random()*5*(gs.pStatus.shield?.3:1));
+      logMsg=`🛡️ Enemy heals. Light strike <span class="dp">-${eDmg} HP</span>`;
+      outcome='lose';
+    }
+    gs.comboCount=0;
+ 
+  /* --- HEAL --- */
+  } else {
+    playSound('heal');
+    gs.healUses--;
+    document.getElementById('healUsesD').textContent='×'+gs.healUses;
+    const hAmt=Math.floor(25+Math.random()*10);
+    gs.playerHp=Math.min(gs.playerMaxHp,gs.playerHp+hAmt);
+    doHealFX();showActionWord('HEAL!','#3aaa5a');
+    if(ai==='attack'){
+      eDmg=Math.floor((atkMin+Math.random()*(atkMax-atkMin))*(gs.pStatus.shield?.3:1));
+      logMsg=`💚 Healed <span class="de">+${hAmt}</span> — struck for <span class="dp">-${eDmg}</span>`;
+      gs.stats.aiCorrect++;
+    } else {
+      logMsg=`💚 Healed <span class="de">+${hAmt} HP</span> safely.`;
+    }
+    gs.comboCount=0;
+  }
+ 
+  // Regen
+  if(gs.pStatus.regen){
+    const r=8;gs.playerHp=Math.min(gs.playerMaxHp,gs.playerHp+r);
+    logMsg+=` <span class="li">⟳+${r}</span>`;
+  }
+  // Poison
+  if(gs.eStatus.poison){pDmg+=10;logMsg+=` <span class="de">☠-10</span>`;}
+ 
+  // Tick statuses
+  ['shield','regen'].forEach(k=>{if(gs.pStatus[k]){gs.pStatus[k]--;if(gs.pStatus[k]<=0)delete gs.pStatus[k];}});
+  if(gs.eStatus.poison){gs.eStatus.poison--;if(gs.eStatus.poison<=0)delete gs.eStatus.poison;}
+ 
+  // Apply
+  gs.enemyHp=Math.max(0,gs.enemyHp-pDmg);
+  gs.playerHp=Math.max(0,gs.playerHp-eDmg);
+  gs.stats.dmgDealt+=pDmg;gs.stats.dmgTaken+=eDmg;
+ 
+  // Particles + float
+  if(pDmg>0){
+    const ec2=elCenter(document.getElementById('enemyCard'));
+    spawnP(ec2.x,ec2.y,'#e05050',12);floatDmg(ec2.x,ec2.y,`-${pDmg}`,'r');
+    document.getElementById('enemyCard').classList.add('flash-dmg');
+    setTimeout(()=>document.getElementById('enemyCard').classList.remove('flash-dmg'),400);
+  }
+  if(eDmg>0){
+    const pc2=elCenter(document.getElementById('playerCard'));
+    spawnP(pc2.x,pc2.y,'#4a80c0',10);floatDmg(pc2.x,pc2.y,`-${eDmg}`,'b');
+    document.getElementById('playerCard').classList.add('flash-dmg');
+    setTimeout(()=>document.getElementById('playerCard').classList.remove('flash-dmg'),400);
+    playSound('hit');
+  }
+  if(action==='heal'){
+    const pc2=elCenter(document.getElementById('playerCard'));
+    spawnP(pc2.x,pc2.y,'#3aaa5a',16);floatDmg(pc2.x,pc2.y,'+HEAL','g');
+  }
+ 
+  // Log + MLP update
+  log(`<span class="rn">[R${gs.round}]</span> ${logMsg}`);
+  log(`<span class="li">You:${action.toUpperCase()} Oracle:${ai.toUpperCase()}</span>`);
+  gs.history.push(action);if(gs.history.length>20)gs.history.shift();
+  updateWeights(action);
+ 
+  // Score
+  if(outcome==='win'){gs.score+=Math.floor((15+gs.level*5)*(1+gs.streak*.1));gs.streak++;}
+  else if(outcome==='lose'){gs.streak=0;}
+  gs.lastAction=action;gs.round++;
+  gs.totalRounds++;
+ 
+  updateUI();updatePredUI();
+  if(gs.healUses<=0)document.getElementById('btnHeal').classList.add('disabled');
+ 
+  if(gs.enemyHp<=0)setTimeout(()=>endBattle(true),400);
+  else if(gs.playerHp<=0)setTimeout(()=>endBattle(false),400);
+}
+ 
+/* ============================================================
+   BATTLE VISUAL FX FUNCTIONS
+============================================================ */
+function doAttackFX(){
+  // Player fighter lunges right
+  animFighter('sf-left','anim-attack-right');
+  // Enemy shakes
+  animFighter('sf-right','anim-hit');
+  // Red screen flash
+  screenFlash('rgba(180,20,20,0.35)');
+  // Lightning from player to enemy
+  const pl=elCenter(document.getElementById('sf-left'));
+  const er=elCenter(document.getElementById('sf-right'));
+  drawLightning(pl.x,pl.y,er.x,er.y,'#ff5050',10);
+  // Clash sparks
+  showClash('#ff4444');
+  playSound('clash');
+}
+ 
+function doBlockFX(){
+  animFighter('sf-left','anim-attack-right');
+  animFighter('sf-right','anim-defend');
+  screenFlash('rgba(40,80,180,0.35)');
+  showClash('#4499ff');
+  playSound('block');
+  // Blue screen flash
+  const pr=elCenter(document.getElementById('sf-right'));
+  spawnP(pr.x,pr.y,'#4a80c0',20);
+}
+ 
+function doClashFX(){
+  animFighter('sf-left','anim-attack-right');
+  animFighter('sf-right','anim-attack-left');
+  screenFlash('rgba(180,100,20,0.35)');
+  showClash('#ff8844');
+  playSound('clash');
+  const mid=elCenter(document.getElementById('battle-scene'));
+  spawnP(mid.x,mid.y,'#ff8844',25);
+  spawnP(mid.x,mid.y,'#ffcc44',15);
+}
+ 
+function doDefendFX(){
+  animFighter('sf-left','anim-defend');
+  animFighter('sf-right','anim-hit');
+  screenFlash('rgba(30,80,160,0.3)');
+  // Blue ward sparks
+  const pl=elCenter(document.getElementById('sf-left'));
+  spawnP(pl.x,pl.y,'#4a80c0',18);
+  for(let i=0;i<3;i++) setTimeout(()=>spawnP(pl.x,pl.y,'#88bbff',8),i*60);
+}
+ 
+function doHealFX(){
+  animFighter('sf-left','anim-heal');
+  screenFlash('rgba(20,140,60,0.3)');
+  const pl=elCenter(document.getElementById('playerCard'));
+  drawHealBeam(pl.x,pl.y);
+  for(let i=0;i<4;i++) setTimeout(()=>spawnP(pl.x,pl.y,'#3aaa5a',10),i*80);
+  // Gold sparkle too
+  const sf=elCenter(document.getElementById('sf-left'));
+  for(let i=0;i<3;i++) setTimeout(()=>spawnP(sf.x,sf.y,'#f0d080',8),i*100);
+}
+ 
+/* ============================================================
+   ITEMS
+============================================================ */
+function useItem(item){
+  if(!gs.gameActive||gs.inventory[item]<=0)return;
+  gs.inventory[item]--;playSound('item');
+  let msg='';
+  if(item==='potion'){
+    const a=Math.floor(40+Math.random()*20);
+    gs.playerHp=Math.min(gs.playerMaxHp,gs.playerHp+a);
+    msg=`🧪 <span class="de">Elixir +${a} HP</span>`;
+    const p=elCenter(document.getElementById('playerCard'));
+    spawnP(p.x,p.y,'#80dd9a',20);floatDmg(p.x,p.y,`+${a}`,'g');
+    screenFlash('rgba(20,140,60,0.25)');
+  } else if(item==='bomb'){
+    const d=Math.floor(30+Math.random()*20);
+    gs.enemyHp=Math.max(0,gs.enemyHp-d);gs.stats.dmgDealt+=d;
+    msg=`💣 <span class="de">Bomb -${d} enemy HP!</span>`;
+    const e=elCenter(document.getElementById('enemyCard'));
+    spawnP(e.x,e.y,'#f0d080',25);floatDmg(e.x,e.y,`-${d}`,'gold');
+    screenFlash('rgba(180,120,20,0.4)');showActionWord('BOOM!','#f0d080');
+    showClash('#ffcc44');
+  } else if(item==='rune'){
+    gs.pStatus.regen=3;msg=`🔮 <span class="ls">Regen for 3 turns!</span>`;
+    screenFlash('rgba(100,40,180,0.25)');
+  } else if(item==='shield'){
+    gs.pStatus.shield=3;msg=`🪬 <span class="ls">Ward active! 3 turns.</span>`;
+    screenFlash('rgba(40,80,180,0.25)');
+  }
+  log(msg);updateUI();updateInv();
+  if(gs.enemyHp<=0)setTimeout(()=>endBattle(true),400);
+}
+ 
+/* ============================================================
+   UI
+============================================================ */
+function updateUI(){
+  const pp=Math.max(0,(gs.playerHp/gs.playerMaxHp)*100);
+  const ep=Math.max(0,(gs.enemyHp/gs.enemyMaxHp)*100);
+  document.getElementById('pHpBar').style.width=pp+'%';
+  document.getElementById('pHpTxt').textContent=gs.playerHp+'/'+gs.playerMaxHp;
+  document.getElementById('pHpBar').classList.toggle('low',pp<25);
+  document.getElementById('eHpBar').style.width=ep+'%';
+  document.getElementById('eHpTxt').textContent=gs.enemyHp+'/'+gs.enemyMaxHp;
+  document.getElementById('eHpBar').classList.toggle('low',ep<25);
+ 
+  document.getElementById('scoreD').textContent=gs.score.toLocaleString();
+  document.getElementById('winsD').textContent=gs.wins;
+  document.getElementById('roundD').textContent=gs.round;
+  document.getElementById('streakD').textContent=gs.streak;
+  document.getElementById('streakF').textContent=gs.streak;
+  document.getElementById('roundBadge').textContent='Round '+gs.round;
+ 
+  const acc=gs.stats.aiTotal>0?Math.round((gs.stats.aiCorrect/gs.stats.aiTotal)*100):0;
+  document.getElementById('sDmgD').textContent=gs.stats.dmgDealt;
+  document.getElementById('sDmgT').textContent=gs.stats.dmgTaken;
+  document.getElementById('sDodge').textContent=gs.stats.dodged;
+  document.getElementById('sAcc').textContent=acc+'%';
+  document.getElementById('sCombos').textContent=gs.stats.combos;
+  document.getElementById('accF').textContent=acc+'%';
+ 
+  renderStatus('pStatus',gs.pStatus);
+  renderStatus('eStatus',gs.eStatus);
+}
+ 
+function renderStatus(id,obj){
+  const el=document.getElementById(id);el.innerHTML='';
+  for(const[k,v]of Object.entries(obj)){
+    if(v>0){const p=document.createElement('div');p.className=`spill ${k}`;p.textContent=k.toUpperCase()+' '+v;el.appendChild(p);}
+  }
+}
+ 
+function updateInv(){
+  document.getElementById('cntPotion').textContent='×'+gs.inventory.potion;
+  document.getElementById('cntBomb').textContent='×'+gs.inventory.bomb;
+  document.getElementById('cntRune').textContent='×'+gs.inventory.rune;
+  document.getElementById('cntShield').textContent='×'+gs.inventory.shield;
+  document.getElementById('itmPotion').disabled=gs.inventory.potion<=0;
+  document.getElementById('itmBomb').disabled=gs.inventory.bomb<=0;
+  document.getElementById('itmRune').disabled=gs.inventory.rune<=0;
+  document.getElementById('itmShield').disabled=gs.inventory.shield<=0;
+}
+ 
+function disableBtns(){document.querySelectorAll('.act-btn').forEach(b=>b.classList.add('disabled'))}
+function enableBtns(){
+  document.querySelectorAll('.act-btn').forEach(b=>b.classList.remove('disabled'));
+  if(gs.healUses<=0)document.getElementById('btnHeal').classList.add('disabled');
+}
+ 
+/* ============================================================
+   LOG
+============================================================ */
+function log(html){
+  const lg=document.getElementById('combatLog');
+  const e=document.createElement('div');e.className='log-entry';e.innerHTML=html;
+  lg.appendChild(e);lg.scrollTop=lg.scrollHeight;
+}
+function clearLog(){document.getElementById('combatLog').innerHTML=''}
+ 
+/* ============================================================
+   END / RESTART
+============================================================ */
+function endBattle(won){
+  gs.gameActive=false;disableBtns();
+  if(won){
+    gs.wins++;gs.score+=100+gs.level*50;gs.streak++;
+    playSound('win');
+    for(let i=0;i<3;i++) setTimeout(()=>{
+      const ec=elCenter(document.getElementById('enemyCard'));
+      spawnP(ec.x,ec.y,'#f0d080',30);
+    },i*200);
+    screenFlash('rgba(201,168,76,0.3)');
+  } else {
+    gs.streak=0;playSound('lose');
+    screenFlash('rgba(139,26,26,0.5)');
+  }
+ 
+  const acc=gs.stats.aiTotal>0?Math.round((gs.stats.aiCorrect/gs.stats.aiTotal)*100):0;
+  document.getElementById('ovTitle').textContent=won?'⚔ Victory!':'💀 Defeated';
+  document.getElementById('ovTitle').className='ov-title '+(won?'win':'lose');
+  document.getElementById('ovSub').textContent=won?`${gs.enemy.name} defeated!`:'The Oracle foresaw your fall.';
+  document.getElementById('ovStats').innerHTML=`
+    <div class="ov-s"><div class="ov-sn">${gs.score.toLocaleString()}</div><div class="ov-sl">Score</div></div>
+    <div class="ov-s"><div class="ov-sn">${gs.round-1}</div><div class="ov-sl">Rounds</div></div>
+    <div class="ov-s"><div class="ov-sn">${acc}%</div><div class="ov-sl">AI Accuracy</div></div>
+    <div class="ov-s"><div class="ov-sn">${gs.stats.dmgDealt}</div><div class="ov-sl">Dmg Dealt</div></div>
+  `;
+  document.getElementById('overlay').classList.remove('hidden');
+}
+ 
+function restartGame(){
+  document.getElementById('overlay').classList.add('hidden');
+  gs={score:0,wins:0,streak:0,level:0,history:[],weights:null,totalRounds:0};
+  initGame(false);
+}
+ 
+function nextLevel(){
+  document.getElementById('overlay').classList.add('hidden');
+  initGame(false);
+}
+ 
+/* ============================================================
+   START
+============================================================ */
+gs={score:0,wins:0,streak:0,level:0,history:[],weights:null,totalRounds:0};
+initGame(false);
+updatePredUI();
+</script>
+</body>
+</html>
